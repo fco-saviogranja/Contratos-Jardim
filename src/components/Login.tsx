@@ -4,7 +4,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card } from './ui/card';
 import { toast } from 'sonner@2.0.3';
-import { createClient } from '../utils/supabase/client';
+import { localStore } from '../utils/localStore';
 
 interface LoginProps {
   onLoginSuccess: () => void;
@@ -20,24 +20,15 @@ export function Login({ onLoginSuccess }: LoginProps) {
     setLoading(true);
 
     try {
-      const supabase = createClient();
+      // Authenticate offline (no Supabase)
+      const user = localStore.authenticate(email, password);
       
-      // Convert username to email format
-      const loginEmail = email.includes('@') ? email : `${email}@jardim.ce.gov.br`;
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
-        password,
-      });
-
-      if (error) {
-        throw error;
+      if (!user) {
+        throw new Error('Usuário ou senha incorretos');
       }
 
-      if (data.session) {
-        toast.success('Login realizado com sucesso!');
-        onLoginSuccess();
-      }
+      toast.success('Login realizado com sucesso!');
+      onLoginSuccess();
     } catch (error: any) {
       console.error('Login error:', error);
       toast.error(error.message || 'Erro ao fazer login. Verifique suas credenciais.');
@@ -77,7 +68,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin"
+                placeholder="gustavobarros"
                 required
                 autoComplete="username"
               />

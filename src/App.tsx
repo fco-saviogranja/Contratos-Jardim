@@ -2,9 +2,7 @@ import { useState, useEffect } from 'react';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { InitialSetup } from './components/InitialSetup';
-import { createClient } from './utils/supabase/client';
 import { Toaster } from './components/ui/sonner';
-import { toast } from 'sonner@2.0.3';
 import { localStore } from './utils/localStore';
 
 interface User {
@@ -20,6 +18,8 @@ export default function App() {
   const [needsSetup, setNeedsSetup] = useState(false);
 
   useEffect(() => {
+    // Initialize default user on first load
+    localStore.initializeDefaultUser();
     checkSession();
     loadSystemSettings();
   }, []);
@@ -39,24 +39,24 @@ export default function App() {
 
   const checkSession = async () => {
     try {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
+      // Check offline session
+      const session = localStore.getCurrentSession();
 
-      if (session?.user) {
+      if (session?.userId) {
         // Get user profile from localStorage
-        const profile = localStore.getUser(session.user.id);
+        const profile = localStore.getUser(session.userId);
         
         if (profile) {
           setUser({
-            id: session.user.id,
-            email: session.user.email || '',
+            id: profile.id,
+            email: profile.email,
             name: profile.name,
             role: profile.role,
           });
           setNeedsSetup(false);
         } else {
           // Session exists but no profile - clear session
-          await supabase.auth.signOut();
+          localStore.clearSession();
           setNeedsSetup(localStore.needsSetup());
         }
       } else {
@@ -71,24 +71,19 @@ export default function App() {
     }
   };
 
-  const checkIfNeedsSetup = async () => {
-    setNeedsSetup(localStore.needsSetup());
-  };
-
   const handleLogout = async () => {
     try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
+      localStore.clearSession();
       setUser(null);
-      toast.success('Logout realizado com sucesso!');
     } catch (error) {
       console.error('Error logging out:', error);
-      toast.error('Erro ao fazer logout');
     }
   };
 
   const handleSetupComplete = () => {
     setNeedsSetup(false);
+    // Recheck session after setup
+    checkSession();
   };
 
   if (loading) {

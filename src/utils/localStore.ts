@@ -7,6 +7,7 @@ interface UserProfile {
   name: string;
   role: 'admin' | 'gestor';
   createdAt: string;
+  password?: string; // Adicionado para autenticação local
 }
 
 interface Contract {
@@ -34,6 +35,72 @@ interface SystemSettings {
 
 // Helper functions
 export const localStore = {
+  // Authentication (offline)
+  authenticate: (username: string, password: string): UserProfile | null => {
+    console.log('🔐 Tentando autenticar:', username);
+    const users = localStore.getAllUsers();
+    console.log('👥 Usuários encontrados:', users.length);
+    console.log('📋 Lista de usuários:', users.map(u => ({ email: u.email, hasPassword: !!u.password })));
+    
+    const user = users.find(u => {
+      const emailUsername = u.email.split('@')[0];
+      const usernameMatch = emailUsername === username || u.email === username;
+      const passwordMatch = u.password === password;
+      
+      console.log(`Verificando usuário ${u.email}:`, {
+        emailUsername,
+        usernameMatch,
+        passwordMatch,
+        storedPassword: u.password,
+        providedPassword: password
+      });
+      
+      return usernameMatch && passwordMatch;
+    });
+    
+    if (user) {
+      console.log('✅ Usuário autenticado:', user.email);
+      // Store session
+      localStorage.setItem('currentSession', JSON.stringify({
+        userId: user.id,
+        timestamp: new Date().toISOString()
+      }));
+      return user;
+    }
+    
+    console.log('❌ Autenticação falhou');
+    return null;
+  },
+
+  createUser: (username: string, password: string, name: string, role: 'admin' | 'gestor' = 'admin'): UserProfile => {
+    console.log('🆕 Criando usuário:', { username, name, role });
+    const userId = crypto.randomUUID();
+    const email = `${username}@jardim.ce.gov.br`;
+    
+    const newUser: UserProfile = {
+      id: userId,
+      email,
+      name,
+      role,
+      password,
+      createdAt: new Date().toISOString(),
+    };
+    
+    localStore.setUser(userId, newUser);
+    console.log('✅ Usuário criado:', newUser);
+    console.log('📝 Verificando salvamento:', localStore.getUser(userId));
+    return newUser;
+  },
+
+  getCurrentSession: (): { userId: string; timestamp: string } | null => {
+    const session = localStorage.getItem('currentSession');
+    return session ? JSON.parse(session) : null;
+  },
+
+  clearSession: (): void => {
+    localStorage.removeItem('currentSession');
+  },
+
   // Users
   getUser: (userId: string): UserProfile | null => {
     const users = JSON.parse(localStorage.getItem('users') || '{}');
@@ -101,5 +168,24 @@ export const localStore = {
   needsSetup: (): boolean => {
     const users = localStore.getAllUsers();
     return users.length === 0;
+  },
+
+  // Initialize default admin user
+  initializeDefaultUser: (): void => {
+    if (localStore.needsSetup()) {
+      console.log('🆕 Criando usuário padrão...');
+      const userId = 'default-admin-gustavo-barros';
+      const defaultUser: UserProfile = {
+        id: userId,
+        email: 'gustavobarros@jardim.ce.gov.br',
+        name: 'Gustavo Barros',
+        role: 'admin',
+        password: '123456',
+        createdAt: new Date().toISOString(),
+      };
+      
+      localStore.setUser(userId, defaultUser);
+      console.log('✅ Usuário padrão criado:', defaultUser);
+    }
   },
 };

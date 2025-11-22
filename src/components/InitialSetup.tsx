@@ -5,7 +5,6 @@ import { Label } from './ui/label';
 import { Card } from './ui/card';
 import { toast } from 'sonner@2.0.3';
 import { CheckCircle } from 'lucide-react';
-import { createClient } from '../utils/supabase/client';
 import { localStore } from '../utils/localStore';
 
 interface InitialSetupProps {
@@ -13,9 +12,9 @@ interface InitialSetupProps {
 }
 
 export function InitialSetup({ onSetupComplete }: InitialSetupProps) {
-  const [name, setName] = useState('Administrador');
-  const [email, setEmail] = useState('admin');
-  const [password, setPassword] = useState('admin');
+  const [name, setName] = useState('Gustavo Barros');
+  const [email, setEmail] = useState('gustavobarros');
+  const [password, setPassword] = useState('123456');
   const [loading, setLoading] = useState(false);
 
   const handleSetup = async (e: React.FormEvent) => {
@@ -23,40 +22,31 @@ export function InitialSetup({ onSetupComplete }: InitialSetupProps) {
     setLoading(true);
 
     try {
-      const supabase = createClient();
+      console.log('🚀 Iniciando setup...');
       
-      // Create auth user in Supabase
-      const { data, error } = await supabase.auth.signUp({
-        email: 'admin@jardim.ce.gov.br',
-        password: password,
-        options: {
-          data: {
-            name: name,
-          }
-        }
-      });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      if (!data.user) {
-        throw new Error('Erro ao criar usuário');
-      }
-
-      // Store user profile in localStorage
-      localStore.setUser(data.user.id, {
-        id: data.user.id,
-        email: 'admin@jardim.ce.gov.br',
-        name: name,
-        role: 'admin',
-        createdAt: new Date().toISOString(),
-      });
-
-      toast.success('Administrador criado com sucesso! Você já pode fazer login.');
-      onSetupComplete();
+      // Create user offline (no Supabase Auth)
+      const newUser = localStore.createUser(email, password, name, 'admin');
+      
+      console.log('✅ Usuário criado com sucesso:', newUser);
+      
+      // Verify user was saved
+      const savedUser = localStore.getUser(newUser.id);
+      console.log('📝 Verificando usuário salvo:', savedUser);
+      
+      // Auto-login: create session
+      localStorage.setItem('currentSession', JSON.stringify({
+        userId: newUser.id,
+        timestamp: new Date().toISOString()
+      }));
+      
+      toast.success('Administrador criado com sucesso! Redirecionando...');
+      
+      // Small delay for better UX
+      setTimeout(() => {
+        onSetupComplete();
+      }, 1000);
     } catch (error: any) {
-      console.error('Setup error:', error);
+      console.error('❌ Setup error:', error);
       toast.error(error.message || 'Erro ao criar administrador');
     } finally {
       setLoading(false);
@@ -99,7 +89,6 @@ export function InitialSetup({ onSetupComplete }: InitialSetupProps) {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Digite o nome completo"
                 required
-                disabled
               />
             </div>
 
@@ -110,9 +99,8 @@ export function InitialSetup({ onSetupComplete }: InitialSetupProps) {
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin"
+                placeholder="gustavobarros"
                 required
-                disabled
               />
             </div>
 
@@ -123,12 +111,11 @@ export function InitialSetup({ onSetupComplete }: InitialSetupProps) {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="admin"
+                placeholder="Digite a senha"
                 required
                 minLength={5}
-                disabled
               />
-              <p className="text-xs text-gray-500">Usuário: admin / Senha: admin</p>
+              <p className="text-xs text-gray-500">Usuário: gustavobarros / Senha: 123456</p>
             </div>
 
             <Button
