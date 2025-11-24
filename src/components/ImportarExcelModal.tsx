@@ -198,6 +198,17 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
 
               {/* Instruções */}
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <h3 className="text-amber-900 font-medium text-sm mb-3">
+                  Ordem das colunas no Excel
+                </h3>
+                <div className="bg-white rounded border border-amber-300 p-3 mb-3">
+                  <ol className="text-amber-900 text-sm space-y-1.5 font-medium">
+                    <li>1. Secretaria</li>
+                    <li>2. Contratado</li>
+                    <li>3. Objeto</li>
+                    <li>4. Data final da Vigência</li>
+                  </ol>
+                </div>
                 <h3 className="text-amber-900 font-medium text-sm mb-2">
                   Instruções de preenchimento
                 </h3>
