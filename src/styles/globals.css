@@ -3,47 +3,42 @@
 :root {
   --font-size: 16px;
   --background: #ffffff;
-  --foreground: #2d2d2d;
+  --foreground: oklch(0.145 0 0);
   --card: #ffffff;
-  --card-foreground: #2d2d2d;
-  --popover: #ffffff;
-  --popover-foreground: #2d2d2d;
-  --primary: #4a7c59;
-  --primary-foreground: #ffffff;
-  --secondary: #f8f9fa;
-  --secondary-foreground: #4a7c59;
-  --muted: #f1f3f4;
-  --muted-foreground: #6c757d;
-  --accent: #e8f5e8;
-  --accent-foreground: #4a7c59;
-  --destructive: #dc3545;
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: #030213;
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.95 0.0058 264.53);
+  --secondary-foreground: #030213;
+  --muted: #ececf0;
+  --muted-foreground: #717182;
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+  --destructive: #d4183d;
   --destructive-foreground: #ffffff;
-  --border: #dee2e6;
+  --border: rgba(0, 0, 0, 0.1);
   --input: transparent;
-  --input-background: #f8f9fa;
-  --switch-background: #ced4da;
+  --input-background: #f3f3f5;
+  --switch-background: #cbced4;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #4a7c59;
-  --chart-1: #4a7c59;
-  --chart-2: #6c9a6f;
-  --chart-3: #8db390;
-  --chart-4: #aeccb1;
-  --chart-5: #cfe5d2;
-  --radius: 0.5rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #2d2d2d;
-  --sidebar-primary: #4a7c59;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f8f9fa;
-  --sidebar-accent-foreground: #4a7c59;
-  --sidebar-border: #dee2e6;
-  --sidebar-ring: #4a7c59;
-  --jardim-green: #4a7c59;
-  --jardim-green-light: #6c9a6f;
-  --jardim-green-lighter: #e8f5e8;
-  --jardim-gray: #6c757d;
-  --jardim-gray-light: #f8f9fa;
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #030213;
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
@@ -122,13 +117,6 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.25rem;
-  --text-2xl: 1.5rem;
-  --text-3xl: 1.875rem;
 }
 
 @layer base {
@@ -145,130 +133,62 @@
  * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
  */
 @layer base {
-  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
+  :where(:not(:has([class*=' text-']), :not(:has([class^='text-'])))) {
     h1 {
       font-size: var(--text-2xl);
-      font-weight: var(--font-weight-medium);
+      font-weight: 500;
       line-height: 1.5;
     }
 
     h2 {
       font-size: var(--text-xl);
-      font-weight: var(--font-weight-medium);
+      font-weight: 500;
       line-height: 1.5;
     }
 
     h3 {
       font-size: var(--text-lg);
-      font-weight: var(--font-weight-medium);
+      font-weight: 500;
       line-height: 1.5;
     }
 
     h4 {
       font-size: var(--text-base);
-      font-weight: var(--font-weight-medium);
+      font-weight: 500;
       line-height: 1.5;
     }
 
     p {
       font-size: var(--text-base);
-      font-weight: var(--font-weight-normal);
+      font-weight: 400;
       line-height: 1.5;
     }
 
     label {
-      font-size: var(--text-base);
-      font-weight: var(--font-weight-medium);
+      font-size: var(--text-sm);
+      font-weight: 500;
       line-height: 1.5;
     }
 
     button {
-      font-size: var(--text-base);
-      font-weight: var(--font-weight-medium);
+      font-size: var(--text-sm);
+      font-weight: 500;
       line-height: 1.5;
     }
 
-    input {
-      font-size: var(--text-base);
-      font-weight: var(--font-weight-normal);
+    input, select, textarea {
+      font-size: var(--text-sm);
+      font-weight: 400;
       line-height: 1.5;
+    }
+    
+    table {
+      font-size: var(--text-sm);
+      font-weight: 400;
     }
   }
 }
 
 html {
   font-size: var(--font-size);
-}
-
-/* Destaque especial para TranspJardim - versão otimizada */
-.transpjardim-title {
-  font-weight: 900;
-  background: var(--jardim-green);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  text-shadow: 0 2px 4px rgba(74, 124, 89, 0.1);
-  letter-spacing: -0.02em;
-}
-
-.transpjardim-title-large {
-  font-size: clamp(1.5rem, 3vw, 2.625rem);
-  line-height: 1.1;
-}
-
-.transpjardim-title-medium {
-  font-size: clamp(1.125rem, 2.25vw, 1.5rem);
-  line-height: 1.2;
-}
-
-/* Remover animação para reduzir uso de GPU/memória */
-
-/* Classes especiais para logomarca com fundo transparente */
-.jardim-logo-transparent {
-  position: relative;
-  background: transparent !important;
-}
-
-.jardim-logo-transparent img {
-  mix-blend-mode: multiply;
-  background: transparent;
-  /* Remove fundos brancos automaticamente */
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)) contrast(1.1) brightness(1.05);
-}
-
-/* Versão alternativa para fundos escuros */
-.jardim-logo-transparent.dark-background img {
-  mix-blend-mode: screen;
-  filter: drop-shadow(0 2px 4px rgba(255,255,255,0.1)) contrast(1.1) brightness(0.95) invert(1);
-}
-
-/* Estilo especial para cabeçalho */
-.jardim-header-logo {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/* Garantir que imagens da logo mantenham proporção */
-.jardim-logo-transparent img,
-.jardim-logo-container img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  object-position: center;
-}
-
-/* Utilitários para truncamento de texto */
-.line-clamp-1 {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-}
-
-.line-clamp-2 {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
