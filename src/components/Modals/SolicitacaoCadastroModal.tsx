@@ -13,7 +13,6 @@ export function SolicitacaoCadastroModal({ isOpen, onClose }: SolicitacaoCadastr
   const [cargo, setCargo] = useState('');
   const [setor, setSetor] = useState('');
   const [senha, setSenha] = useState('');
-  const [confirmarSenha, setConfirmarSenha] = useState('');
   const [justificativa, setJustificativa] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -28,7 +27,7 @@ export function SolicitacaoCadastroModal({ isOpen, onClose }: SolicitacaoCadastr
 
     try {
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-1a8b02da/solicitar-cadastro`,
+        `https://${projectId}.supabase.co/functions/v1/make-server-1a8b02da/solicitacoes`,
         {
           method: 'POST',
           headers: {
@@ -41,7 +40,6 @@ export function SolicitacaoCadastroModal({ isOpen, onClose }: SolicitacaoCadastr
             cargo,
             setor,
             senha,
-            confirmarSenha,
             justificativa,
           }),
         }
@@ -221,20 +219,6 @@ export function SolicitacaoCadastroModal({ isOpen, onClose }: SolicitacaoCadastr
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               placeholder="Digite sua senha"
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0b6b3a] focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-gray-700 text-sm font-medium mb-2">
-              Confirmar Senha *
-            </label>
-            <input
-              type="password"
-              value={confirmarSenha}
-              onChange={(e) => setConfirmarSenha(e.target.value)}
-              placeholder="Confirme sua senha"
               required
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0b6b3a] focus:border-transparent"
             />

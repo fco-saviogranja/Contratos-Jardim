@@ -265,6 +265,38 @@ export const usuarios = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  },
+
+  async getSecretarias() {
+    return fetchAPI('/secretarias');
+  },
+
+  async createSecretaria(data: {
+    nome: string;
+    sigla: string;
+    responsavel: string;
+  }) {
+    return fetchAPI('/secretarias', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateSecretaria(id: string, data: {
+    nome: string;
+    sigla: string;
+    responsavel: string;
+  }) {
+    return fetchAPI(`/secretarias/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteSecretaria(id: string) {
+    return fetchAPI(`/secretarias/${id}`, {
+      method: 'DELETE',
+    });
   }
 };
 

@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { MainLayout } from './components/Layout/MainLayout';
 import { Login } from './pages/Login';
 import { SetupInicial } from './pages/SetupInicial';
+import { SolicitarAcesso } from './pages/SolicitarAcesso';
 import { Dashboard } from './pages/Dashboard';
 import { MeusContratos } from './pages/MeusContratos';
 import { TodosContratos } from './pages/TodosContratos';
@@ -18,13 +19,18 @@ function AppContent() {
   const { isAuthenticated } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [showSetup, setShowSetup] = useState(false);
+  const [showSolicitarAcesso, setShowSolicitarAcesso] = useState(false);
 
   if (!isAuthenticated) {
     // Mostrar setup inicial se solicitado
     if (showSetup) {
       return <SetupInicial />;
     }
-    return <Login onShowSetup={() => setShowSetup(true)} />;
+    // Mostrar página de solicitar acesso
+    if (showSolicitarAcesso) {
+      return <SolicitarAcesso />;
+    }
+    return <Login onShowSetup={() => setShowSetup(true)} onShowSolicitarAcesso={() => setShowSolicitarAcesso(true)} />;
   }
 
   const renderPage = () => {

@@ -7,9 +7,10 @@ import logoImage from 'figma:asset/600321a23fd1c8706abb2a9ad97f41dade268db0.png'
 
 interface LoginProps {
   onShowSetup?: () => void;
+  onShowSolicitarAcesso?: () => void;
 }
 
-export function Login({ onShowSetup }: LoginProps) {
+export function Login({ onShowSetup, onShowSolicitarAcesso }: LoginProps) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -72,7 +73,7 @@ export function Login({ onShowSetup }: LoginProps) {
 
           <div>
             <label className="block text-gray-700 text-sm font-medium mb-2">
-              E-mail institucional
+              E-mail
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-gray-400" />

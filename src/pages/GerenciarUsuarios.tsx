@@ -1,19 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Edit, UserX, UserCheck, UserPlus, Loader, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Edit, UserX, UserCheck, UserPlus, Loader, Clock, CheckCircle, XCircle, Trash2 } from 'lucide-react';
 import { usuarios as usuariosAPI } from '../utils/api';
 import { toast } from 'sonner@2.0.3';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 
 export function GerenciarUsuarios() {
-  const [activeTab, setActiveTab] = useState<'admin' | 'gestor' | 'fiscal' | 'solicitacoes'>('admin');
+  const [activeTab, setActiveTab] = useState<'admin' | 'gestor' | 'fiscal' | 'secretarias' | 'solicitacoes'>('admin');
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAprovarModal, setShowAprovarModal] = useState(false);
   const [showRejeitarModal, setShowRejeitarModal] = useState(false);
+  const [showSecretariaModal, setShowSecretariaModal] = useState(false);
+  const [showEditSecretariaModal, setShowEditSecretariaModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [selectedSolicitacao, setSelectedSolicitacao] = useState<any | null>(null);
+  const [selectedSecretaria, setSelectedSecretaria] = useState<any | null>(null);
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [solicitacoes, setSolicitacoes] = useState<any[]>([]);
+  const [secretarias, setSecretarias] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -32,16 +36,21 @@ export function GerenciarUsuarios() {
   });
   const [aprovarForm, setAprovarForm] = useState({
     perfil: 'gestor',
-    senha: '',
     observacoes: ''
   });
   const [rejeitarForm, setRejeitarForm] = useState({
     observacoes: ''
   });
+  const [secretariaForm, setSecretariaForm] = useState({
+    nome: '',
+    sigla: '',
+    responsavel: ''
+  });
 
   useEffect(() => {
     carregarUsuarios();
     carregarSolicitacoes();
+    carregarSecretarias();
   }, []);
 
   const carregarUsuarios = async () => {
@@ -93,6 +102,7 @@ export function GerenciarUsuarios() {
     { id: 'admin' as const, label: 'Administradores (CGM)', count: countByPerfil.admin },
     { id: 'gestor' as const, label: 'Gestores de Contratos', count: countByPerfil.gestor },
     { id: 'fiscal' as const, label: 'Fiscais de Contratos', count: countByPerfil.fiscal },
+    { id: 'secretarias' as const, label: 'Secretarias / Órgãos', count: secretarias.length },
     { id: 'solicitacoes' as const, label: 'Solicitações de Usuários', count: solicitacoes.length }
   ];
 
@@ -137,10 +147,8 @@ export function GerenciarUsuarios() {
   const handleToggleSituacao = (usuario: any) => {
     const novaSituacao = usuario.situacao === 'ativo' ? 'inativo' : 'ativo';
     const acao = novaSituacao === 'ativo' ? 'reativar' : 'desativar';
-    
-    if (confirm(`Tem certeza que deseja ${acao} o usuário "${usuario.nome}"?`)) {
-      alert(`Usuário ${novaSituacao === 'ativo' ? 'reativado' : 'desativado'} com sucesso!\n\nNota: Em produção, isso atualizaria o banco de dados.`);
-      // Aqui você atualizaria o estado ou chamaria uma API
+    if (confirm(`Deseja realmente ${acao} o usuário ${usuario.nome}?`)) {
+      alert('Funcionalidade em desenvolvimento');
     }
   };
 
@@ -234,7 +242,6 @@ export function GerenciarUsuarios() {
       setSelectedSolicitacao(null);
       setAprovarForm({
         perfil: 'gestor',
-        senha: '',
         observacoes: ''
       });
     }
@@ -268,6 +275,120 @@ export function GerenciarUsuarios() {
       setRejeitarForm({
         observacoes: ''
       });
+    }
+  };
+
+  const handleSaveSecretaria = async () => {
+    if (!secretariaForm.nome || !secretariaForm.sigla || !secretariaForm.responsavel) {
+      alert('Por favor, preencha todos os campos obrigatórios.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      console.log('📝 Criando secretaria no backend...');
+      const response = await usuariosAPI.createSecretaria(secretariaForm);
+      console.log('💾 Resposta do backend:', response);
+      
+      if (response.success) {
+        toast.success('Secretaria criada com sucesso!');
+        carregarSecretarias();
+      } else {
+        toast.error('Erro ao criar secretaria: ' + response.message);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao criar secretaria:', error);
+      toast.error('Erro ao criar secretaria: ' + error.message);
+    } finally {
+      setSaving(false);
+      setShowSecretariaModal(false);
+      setSecretariaForm({
+        nome: '',
+        sigla: '',
+        responsavel: ''
+      });
+    }
+  };
+
+  const handleSaveEditSecretaria = async () => {
+    if (!secretariaForm.nome || !secretariaForm.sigla || !secretariaForm.responsavel) {
+      alert('Por favor, preencha todos os campos obrigatórios.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      console.log('📝 Atualizando secretaria no backend...');
+      const response = await usuariosAPI.updateSecretaria(selectedSecretaria.id, secretariaForm);
+      console.log('💾 Resposta do backend:', response);
+      
+      if (response.success) {
+        toast.success('Secretaria atualizada com sucesso!');
+        carregarSecretarias();
+      } else {
+        toast.error('Erro ao atualizar secretaria: ' + response.message);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar secretaria:', error);
+      toast.error('Erro ao atualizar secretaria: ' + error.message);
+    } finally {
+      setSaving(false);
+      setShowEditSecretariaModal(false);
+      setSelectedSecretaria(null);
+    }
+  };
+
+  const carregarSecretarias = async () => {
+    try {
+      setLoading(true);
+      console.log('🔍 Buscando secretarias do backend...');
+      const response = await usuariosAPI.getSecretarias();
+      console.log('📥 Secretarias recebidas:', response);
+      
+      if (response.success && response.secretarias) {
+        setSecretarias(response.secretarias);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao carregar secretarias:', error);
+      toast.error('Erro ao carregar secretarias: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditSecretariaClick = (secretaria: any) => {
+    setSelectedSecretaria(secretaria);
+    setSecretariaForm({
+      nome: secretaria.nome,
+      sigla: secretaria.sigla,
+      responsavel: secretaria.responsavel
+    });
+    setShowEditSecretariaModal(true);
+  };
+
+  const handleDeleteSecretaria = async (secretaria: any) => {
+    if (!confirm(`Tem certeza que deseja excluir a secretaria "${secretaria.nome}"?\n\nEsta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      console.log('🗑️ Excluindo secretaria no backend...');
+      const response = await usuariosAPI.deleteSecretaria(secretaria.id);
+      console.log('💾 Resposta do backend:', response);
+      
+      if (response.success) {
+        toast.success('Secretaria excluída com sucesso!');
+        // Atualizar lista local removendo a secretaria
+        setSecretarias(secretarias.filter(s => s.id !== secretaria.id));
+      } else {
+        toast.error('Erro ao excluir secretaria: ' + response.message);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao excluir secretaria:', error);
+      toast.error('Erro ao excluir secretaria: ' + error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -501,6 +622,96 @@ export function GerenciarUsuarios() {
                 <span className="text-gray-600 text-sm">
                   Mostrando {solicitacoes.length} de {solicitacoes.length} solicitações
                 </span>
+              </div>
+            </>
+          )
+        ) : activeTab === 'secretarias' ? (
+          // Tabela de secretarias
+          secretarias.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <p className="text-gray-600">Nenhuma secretaria encontrada.</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
+                        Nome
+                      </th>
+                      <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
+                        Sigla
+                      </th>
+                      <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
+                        Responsável
+                      </th>
+                      <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
+                        Situação
+                      </th>
+                      <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
+                        Ações
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {secretarias.map((secretaria) => (
+                      <tr key={secretaria.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-[#102a43] text-sm font-medium">
+                          {secretaria.nome}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-sm">
+                          {secretaria.sigla}
+                        </td>
+                        <td className="px-4 py-3 text-[#102a43] text-sm">
+                          {secretaria.responsavel}
+                        </td>
+                        <td className="px-4 py-3">
+                          {secretaria.situacao === 'ativa' && (
+                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                              Ativa
+                            </span>
+                          )}
+                          {secretaria.situacao === 'inativa' && (
+                            <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
+                              Inativa
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
+                            <button 
+                              className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+                              title="Editar"
+                              onClick={() => handleEditSecretariaClick(secretaria)}
+                            >
+                              <Edit className="size-4 text-gray-600" />
+                            </button>
+                            <button 
+                              className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+                              title="Excluir"
+                              onClick={() => handleDeleteSecretaria(secretaria)}
+                            >
+                              <Trash2 className="size-4 text-red-600" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+                <span className="text-gray-600 text-sm">
+                  Mostrando {secretarias.length} de {secretarias.length} secretarias
+                </span>
+                <button
+                  className="px-4 py-2 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium"
+                  onClick={() => setShowSecretariaModal(true)}
+                >
+                  Nova secretaria
+                </button>
               </div>
             </>
           )
@@ -943,6 +1154,136 @@ export function GerenciarUsuarios() {
                   onClick={handleRejeitarSolicitacao}
                 >
                   {saving ? <Loader className="size-4 animate-spin" /> : 'Rejeitar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de criação de secretaria */}
+      {showSecretariaModal && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-white/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-[500px] shadow-2xl border border-gray-200">
+            <h2 className="text-[#102a43] text-xl font-medium mb-4">
+              Criar nova secretaria
+            </h2>
+            <form>
+              <div className="mb-4">
+                <label className="block text-gray-600 text-sm mb-1 font-medium">
+                  Nome
+                </label>
+                <input
+                  type="text"
+                  value={secretariaForm.nome}
+                  onChange={(e) => setSecretariaForm({ ...secretariaForm, nome: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-gray-600 text-sm mb-1 font-medium">
+                  Sigla
+                </label>
+                <input
+                  type="text"
+                  value={secretariaForm.sigla}
+                  onChange={(e) => setSecretariaForm({ ...secretariaForm, sigla: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-gray-600 text-sm mb-1 font-medium">
+                  Responsável
+                </label>
+                <input
+                  type="text"
+                  value={secretariaForm.responsavel}
+                  onChange={(e) => setSecretariaForm({ ...secretariaForm, responsavel: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
+                />
+              </div>
+              
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-gray-200 text-gray-600 rounded-md text-sm hover:bg-gray-300 mr-2"
+                  onClick={() => setShowSecretariaModal(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium"
+                  onClick={handleSaveSecretaria}
+                >
+                  {saving ? <Loader className="size-4 animate-spin" /> : 'Salvar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de edição de secretaria */}
+      {showEditSecretariaModal && selectedSecretaria && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-white/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-[500px] shadow-2xl border border-gray-200">
+            <h2 className="text-[#102a43] text-xl font-medium mb-4">
+              Editar secretaria
+            </h2>
+            <form>
+              <div className="mb-4">
+                <label className="block text-gray-600 text-sm mb-1 font-medium">
+                  Nome
+                </label>
+                <input
+                  type="text"
+                  value={secretariaForm.nome}
+                  onChange={(e) => setSecretariaForm({ ...secretariaForm, nome: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-gray-600 text-sm mb-1 font-medium">
+                  Sigla
+                </label>
+                <input
+                  type="text"
+                  value={secretariaForm.sigla}
+                  onChange={(e) => setSecretariaForm({ ...secretariaForm, sigla: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-gray-600 text-sm mb-1 font-medium">
+                  Responsável
+                </label>
+                <input
+                  type="text"
+                  value={secretariaForm.responsavel}
+                  onChange={(e) => setSecretariaForm({ ...secretariaForm, responsavel: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
+                />
+              </div>
+              
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-gray-200 text-gray-600 rounded-md text-sm hover:bg-gray-300 mr-2"
+                  onClick={() => setShowEditSecretariaModal(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium"
+                  onClick={handleSaveEditSecretaria}
+                >
+                  {saving ? <Loader className="size-4 animate-spin" /> : 'Salvar'}
                 </button>
               </div>
             </form>

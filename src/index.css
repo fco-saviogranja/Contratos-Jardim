@@ -103,6 +103,7 @@
     --color-blue-50: oklch(.97 .014 254.604);
     --color-blue-100: oklch(.932 .032 255.585);
     --color-blue-200: oklch(.882 .059 254.128);
+    --color-blue-300: oklch(.809 .105 251.813);
     --color-blue-500: oklch(.623 .214 259.815);
     --color-blue-600: oklch(.546 .245 262.881);
     --color-blue-700: oklch(.488 .243 264.376);
@@ -145,6 +146,7 @@
     --text-2xl--line-height: calc(2 / 1.5);
     --text-3xl: 1.875rem;
     --text-3xl--line-height: calc(2.25 / 1.875);
+    --font-weight-normal: 400;
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --font-weight-bold: 700;
@@ -504,6 +506,10 @@
     top: 50%;
   }
 
+  .top-3 {
+    top: calc(var(--spacing) * 3);
+  }
+
   .top-full {
     top: 100%;
   }
@@ -718,6 +724,10 @@
     height: 100%;
   }
 
+  .max-h-60 {
+    max-height: calc(var(--spacing) * 60);
+  }
+
   .max-h-\[90vh\] {
     max-height: 90vh;
   }
@@ -833,6 +843,10 @@
 
   .animate-spin {
     animation: var(--animate-spin);
+  }
+
+  .cursor-not-allowed {
+    cursor: not-allowed;
   }
 
   .cursor-pointer {
@@ -1071,6 +1085,10 @@
     border-color: var(--color-blue-200);
   }
 
+  .border-blue-300 {
+    border-color: var(--color-blue-300);
+  }
+
   .border-gray-100 {
     border-color: var(--color-gray-100);
   }
@@ -1167,6 +1185,10 @@
 
   .bg-gray-200 {
     background-color: var(--color-gray-200);
+  }
+
+  .bg-gray-400 {
+    background-color: var(--color-gray-400);
   }
 
   .bg-green-50 {
@@ -1466,6 +1488,11 @@
     font-weight: var(--font-weight-medium);
   }
 
+  .font-normal {
+    --tw-font-weight: var(--font-weight-normal);
+    font-weight: var(--font-weight-normal);
+  }
+
   .font-semibold {
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
@@ -1651,6 +1678,10 @@
     color: var(--color-yellow-900);
   }
 
+  .italic {
+    font-style: italic;
+  }
+
   .shadow-2xl {
     --tw-shadow: 0 25px 50px -12px var(--tw-shadow-color, #00000040);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -1751,6 +1782,12 @@
   @media (hover: hover) {
     .hover\:bg-gray-300:hover {
       background-color: var(--color-gray-300);
+    }
+  }
+
+  @media (hover: hover) {
+    .hover\:bg-green-50:hover {
+      background-color: var(--color-green-50);
     }
   }
 

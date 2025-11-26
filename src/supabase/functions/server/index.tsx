@@ -29,7 +29,7 @@ const supabase = createClient(
 
 // Health check endpoint
 app.get("/make-server-1a8b02da/health", (c) => {
-  return c.json({ status: "ok", timestamp: new Date().toISOString() });
+  return c.json({ status: "ok", timestamp: new Date().toISOString(), version: "1.0.0" });
 });
 
 // ========================================
@@ -799,6 +799,172 @@ app.put("/make-server-1a8b02da/usuarios/:id", async (c) => {
   } catch (error) {
     console.error("Erro ao atualizar usuário:", error);
     return c.json({ error: "Erro ao atualizar usuário" }, 500);
+  }
+});
+
+// ========================================
+// SECRETARIAS
+// ========================================
+
+// Listar todas as secretarias
+app.get("/make-server-1a8b02da/secretarias", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    
+    if (!accessToken) {
+      return c.json({ error: "Não autorizado" }, 401);
+    }
+
+    const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+    if (!user || error) {
+      return c.json({ error: "Token inválido" }, 401);
+    }
+
+    let secretarias = await kv.getByPrefix("secretaria:");
+    
+    // Se não houver secretarias, criar as secretarias padrão de Jardim-CE
+    if (!secretarias || secretarias.length === 0) {
+      console.log('🏛️ Criando secretarias padrão de Jardim-CE...');
+      
+      const secretariasPadrao = [
+        { id: '1', nome: 'Secretaria Municipal de Administração e Finanças', sigla: 'SEMAF', responsavel: '', situacao: 'ativa' },
+        { id: '2', nome: 'Secretaria Municipal de Educação', sigla: 'SEMED', responsavel: '', situacao: 'ativa' },
+        { id: '3', nome: 'Secretaria Municipal de Saúde', sigla: 'SEMSAU', responsavel: '', situacao: 'ativa' },
+        { id: '4', nome: 'Secretaria Municipal de Obras e Serviços Públicos', sigla: 'SEMOSP', responsavel: '', situacao: 'ativa' },
+        { id: '5', nome: 'Secretaria Municipal de Agricultura e Meio Ambiente', sigla: 'SEMAMA', responsavel: '', situacao: 'ativa' },
+        { id: '6', nome: 'Secretaria Municipal de Assistência Social', sigla: 'SEMAS', responsavel: '', situacao: 'ativa' },
+        { id: '7', nome: 'Secretaria Municipal de Esporte e Juventude', sigla: 'SEMEJ', responsavel: '', situacao: 'ativa' },
+        { id: '8', nome: 'Secretaria Municipal de Cultura e Turismo', sigla: 'SEMCULT', responsavel: '', situacao: 'ativa' },
+        { id: '9', nome: 'Controladoria Geral do Município', sigla: 'CGM', responsavel: '', situacao: 'ativa' },
+        { id: '10', nome: 'Procuradoria Geral do Município', sigla: 'PGM', responsavel: '', situacao: 'ativa' }
+      ];
+      
+      for (const sec of secretariasPadrao) {
+        await kv.set(`secretaria:${sec.id}`, {
+          ...sec,
+          criadoEm: new Date().toISOString()
+        });
+      }
+      
+      secretarias = await kv.getByPrefix("secretaria:");
+      console.log(`✅ ${secretarias.length} secretarias criadas com sucesso!`);
+    }
+    
+    return c.json({ success: true, secretarias });
+  } catch (error) {
+    console.error("Erro ao listar secretarias:", error);
+    return c.json({ error: "Erro ao listar secretarias" }, 500);
+  }
+});
+
+// Criar nova secretaria
+app.post("/make-server-1a8b02da/secretarias", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    
+    if (!accessToken) {
+      return c.json({ error: "Não autorizado" }, 401);
+    }
+
+    const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+    if (!user || error) {
+      return c.json({ error: "Token inválido" }, 401);
+    }
+
+    const body = await c.req.json();
+    const { nome, sigla, responsavel } = body;
+
+    if (!nome || !sigla) {
+      return c.json({ error: "Nome e sigla são obrigatórios" }, 400);
+    }
+
+    const secretariaId = crypto.randomUUID();
+    const novaSecretaria = {
+      id: secretariaId,
+      nome,
+      sigla,
+      responsavel: responsavel || '',
+      situacao: 'ativa',
+      criadoEm: new Date().toISOString()
+    };
+
+    await kv.set(`secretaria:${secretariaId}`, novaSecretaria);
+
+    console.log(`Secretaria criada: ${nome} (${sigla})`);
+    return c.json({ success: true, secretaria: novaSecretaria });
+  } catch (error) {
+    console.error("Erro ao criar secretaria:", error);
+    return c.json({ error: "Erro ao criar secretaria" }, 500);
+  }
+});
+
+// Atualizar secretaria
+app.put("/make-server-1a8b02da/secretarias/:id", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    
+    if (!accessToken) {
+      return c.json({ error: "Não autorizado" }, 401);
+    }
+
+    const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+    if (!user || error) {
+      return c.json({ error: "Token inválido" }, 401);
+    }
+
+    const id = c.req.param('id');
+    const secretariaExistente = await kv.get(`secretaria:${id}`);
+
+    if (!secretariaExistente) {
+      return c.json({ error: "Secretaria não encontrada" }, 404);
+    }
+
+    const updates = await c.req.json();
+    const secretariaAtualizada = {
+      ...secretariaExistente,
+      ...updates,
+      id, // Garantir que o ID não mude
+      atualizadoEm: new Date().toISOString()
+    };
+
+    await kv.set(`secretaria:${id}`, secretariaAtualizada);
+
+    console.log(`Secretaria atualizada: ${id}`);
+    return c.json({ success: true, secretaria: secretariaAtualizada });
+  } catch (error) {
+    console.error("Erro ao atualizar secretaria:", error);
+    return c.json({ error: "Erro ao atualizar secretaria" }, 500);
+  }
+});
+
+// Deletar secretaria
+app.delete("/make-server-1a8b02da/secretarias/:id", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    
+    if (!accessToken) {
+      return c.json({ error: "Não autorizado" }, 401);
+    }
+
+    const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+    if (!user || error) {
+      return c.json({ error: "Token inválido" }, 401);
+    }
+
+    const id = c.req.param('id');
+    const secretaria = await kv.get(`secretaria:${id}`);
+
+    if (!secretaria) {
+      return c.json({ error: "Secretaria não encontrada" }, 404);
+    }
+
+    await kv.del(`secretaria:${id}`);
+
+    console.log(`Secretaria deletada: ${id}`);
+    return c.json({ success: true, message: "Secretaria excluída com sucesso" });
+  } catch (error) {
+    console.error("Erro ao deletar secretaria:", error);
+    return c.json({ error: "Erro ao deletar secretaria" }, 500);
   }
 });
 
