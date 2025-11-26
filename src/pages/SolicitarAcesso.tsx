@@ -51,7 +51,7 @@ export function SolicitarAcesso() {
       console.log('📤 Enviando solicitação de acesso...');
       
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-1a8b02da/solicitacoes`,
+        `https://${projectId}.supabase.co/functions/v1/make-server-1a8b02da/solicitar-cadastro`,
         {
           method: 'POST',
           headers: {
@@ -62,6 +62,7 @@ export function SolicitarAcesso() {
             nome: formData.nome,
             email: formData.email,
             senha: formData.senha,
+            confirmarSenha: formData.confirmarSenha,
             cargo: formData.cargo,
             setor: formData.setor,
             justificativa: formData.justificativa

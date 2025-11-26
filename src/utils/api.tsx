@@ -155,15 +155,21 @@ export const auth = {
 
   async logout() {
     try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
-    } catch (error) {
-      console.error('Erro ao fazer logout:', error);
-    } finally {
+      // Limpar estado primeiro
+      const hadToken = !!authState.accessToken;
       authState.accessToken = null;
       authState.user = null;
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
+      
+      // Só tentar logout no Supabase se havia token válido
+      if (hadToken) {
+        const supabase = createClient();
+        await supabase.auth.signOut({ scope: 'local' }); // Usar 'local' em vez de 'global'
+      }
+    } catch (error) {
+      // Ignorar erros de logout - o estado local já foi limpo
+      console.warn('Aviso ao fazer logout (ignorado):', error);
     }
   },
 
