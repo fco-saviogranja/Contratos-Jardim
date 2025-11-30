@@ -9,9 +9,9 @@ app.use("/*", cors({ origin: "*", allowHeaders: ["Content-Type", "Authorization"
 const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
 const auth = async (c) => { const t = c.req.header('Authorization')?.split(' ')[1]; if (!t) return null; const { data: { user }, error } = await supabase.auth.getUser(t); return user && !error ? user : null; };
 
-app.get("/make-server-1a8b02da/health", (c) => c.json({ status: "ok", timestamp: new Date().toISOString() }));
+app.get("/health", (c) => c.json({ status: "ok", timestamp: new Date().toISOString() }));
 
-app.post("/make-server-1a8b02da/auth/setup-admin", async (c) => {
+app.post("/auth/setup-admin", async (c) => {
   try {
     const e = 'controleinterno@jardim.ce.gov.br', p = '@Gustavo25';
     const { data: u } = await supabase.auth.admin.listUsers();
@@ -24,7 +24,7 @@ app.post("/make-server-1a8b02da/auth/setup-admin", async (c) => {
   } catch (error) { return c.json({ error: `Erro no setup: ${error.message}` }, 500); }
 });
 
-app.post("/make-server-1a8b02da/auth/signup", async (c) => {
+app.post("/auth/signup", async (c) => {
   try {
     const { email, password, nome, perfil, secretaria } = await c.req.json();
     if (!email || !password || !nome || !perfil || !secretaria) return c.json({ error: "Todos os campos são obrigatórios" }, 400);
@@ -37,7 +37,7 @@ app.post("/make-server-1a8b02da/auth/signup", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao criar usuário" }, 500); }
 });
 
-app.post("/make-server-1a8b02da/auth/login", async (c) => {
+app.post("/auth/login", async (c) => {
   try {
     const { email, password } = await c.req.json();
     if (!email || !password) return c.json({ error: "E-mail e senha são obrigatórios" }, 400);
@@ -49,7 +49,7 @@ app.post("/make-server-1a8b02da/auth/login", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao fazer login" }, 500); }
 });
 
-app.post("/make-server-1a8b02da/solicitar-cadastro", async (c) => {
+app.post("/solicitar-cadastro", async (c) => {
   try {
     const { nome, email, cargo, setor, senha, confirmarSenha, justificativa } = await c.req.json();
     if (!nome || !email || !cargo || !setor || !senha || !confirmarSenha || !justificativa) return c.json({ error: "Todos os campos são obrigatórios" }, 400);
@@ -66,7 +66,7 @@ app.post("/make-server-1a8b02da/solicitar-cadastro", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao enviar solicitação" }, 500); }
 });
 
-app.get("/make-server-1a8b02da/solicitacoes", async (c) => {
+app.get("/solicitacoes", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -78,7 +78,7 @@ app.get("/make-server-1a8b02da/solicitacoes", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao listar solicitações" }, 500); }
 });
 
-app.post("/make-server-1a8b02da/solicitacoes/:id/aprovar", async (c) => {
+app.post("/solicitacoes/:id/aprovar", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -99,7 +99,7 @@ app.post("/make-server-1a8b02da/solicitacoes/:id/aprovar", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao aprovar solicitação" }, 500); }
 });
 
-app.post("/make-server-1a8b02da/solicitacoes/:id/rejeitar", async (c) => {
+app.post("/solicitacoes/:id/rejeitar", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -116,7 +116,7 @@ app.post("/make-server-1a8b02da/solicitacoes/:id/rejeitar", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao rejeitar solicitação" }, 500); }
 });
 
-app.get("/make-server-1a8b02da/contratos", async (c) => {
+app.get("/contratos", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -125,7 +125,7 @@ app.get("/make-server-1a8b02da/contratos", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao listar contratos" }, 500); }
 });
 
-app.get("/make-server-1a8b02da/contratos/:id", async (c) => {
+app.get("/contratos/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -135,7 +135,7 @@ app.get("/make-server-1a8b02da/contratos/:id", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao buscar contrato" }, 500); }
 });
 
-app.post("/make-server-1a8b02da/contratos", async (c) => {
+app.post("/contratos", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -147,7 +147,7 @@ app.post("/make-server-1a8b02da/contratos", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao criar contrato" }, 500); }
 });
 
-app.put("/make-server-1a8b02da/contratos/:id", async (c) => {
+app.put("/contratos/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -161,7 +161,7 @@ app.put("/make-server-1a8b02da/contratos/:id", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao atualizar contrato" }, 500); }
 });
 
-app.delete("/make-server-1a8b02da/contratos/:id", async (c) => {
+app.delete("/contratos/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -172,7 +172,7 @@ app.delete("/make-server-1a8b02da/contratos/:id", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao deletar contrato" }, 500); }
 });
 
-app.get("/make-server-1a8b02da/usuarios/me", async (c) => {
+app.get("/usuarios/me", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -182,7 +182,7 @@ app.get("/make-server-1a8b02da/usuarios/me", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao buscar usuário" }, 500); }
 });
 
-app.get("/make-server-1a8b02da/usuarios", async (c) => {
+app.get("/usuarios", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -191,7 +191,7 @@ app.get("/make-server-1a8b02da/usuarios", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao listar usuários" }, 500); }
 });
 
-app.put("/make-server-1a8b02da/usuarios/:id", async (c) => {
+app.put("/usuarios/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -205,7 +205,7 @@ app.put("/make-server-1a8b02da/usuarios/:id", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao atualizar usuário" }, 500); }
 });
 
-app.get("/make-server-1a8b02da/secretarias", async (c) => {
+app.get("/secretarias", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -219,7 +219,7 @@ app.get("/make-server-1a8b02da/secretarias", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao listar secretarias" }, 500); }
 });
 
-app.post("/make-server-1a8b02da/secretarias", async (c) => {
+app.post("/secretarias", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -232,7 +232,7 @@ app.post("/make-server-1a8b02da/secretarias", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao criar secretaria" }, 500); }
 });
 
-app.put("/make-server-1a8b02da/secretarias/:id", async (c) => {
+app.put("/secretarias/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -246,7 +246,7 @@ app.put("/make-server-1a8b02da/secretarias/:id", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao atualizar secretaria" }, 500); }
 });
 
-app.delete("/make-server-1a8b02da/secretarias/:id", async (c) => {
+app.delete("/secretarias/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -257,7 +257,7 @@ app.delete("/make-server-1a8b02da/secretarias/:id", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao deletar secretaria" }, 500); }
 });
 
-app.get("/make-server-1a8b02da/alertas", async (c) => {
+app.get("/alertas", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -266,7 +266,7 @@ app.get("/make-server-1a8b02da/alertas", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao listar alertas" }, 500); }
 });
 
-app.post("/make-server-1a8b02da/alertas", async (c) => {
+app.post("/alertas", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -278,7 +278,7 @@ app.post("/make-server-1a8b02da/alertas", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao criar alerta" }, 500); }
 });
 
-app.put("/make-server-1a8b02da/alertas/:id", async (c) => {
+app.put("/alertas/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -292,7 +292,7 @@ app.put("/make-server-1a8b02da/alertas/:id", async (c) => {
   } catch (error) { return c.json({ error: "Erro ao atualizar alerta" }, 500); }
 });
 
-app.get("/make-server-1a8b02da/dashboard/stats", async (c) => {
+app.get("/dashboard/stats", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
