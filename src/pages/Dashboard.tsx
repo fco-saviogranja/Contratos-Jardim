@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { mockContratos, mockAlertas, mockAcoesRecentes } from '../data/mockData';
 import { FileText, AlertTriangle, TrendingUp, Users, Calendar, Eye, Download, ChevronRight, Clock, Bell } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
 
@@ -16,8 +15,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     situacao: 'todas'
   });
 
-  // Verificar se há contratos
-  const temContratos = mockContratos.length > 0;
+  // Por enquanto, sempre mostrar o dashboard com dados estáticos para demonstração
+  // No futuro, isso virá da API
+  const temContratos = true;
 
   // Se não há contratos, mostrar estado vazio
   if (!temContratos) {

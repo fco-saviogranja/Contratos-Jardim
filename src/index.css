@@ -1502,6 +1502,10 @@
     white-space: nowrap;
   }
 
+  .whitespace-pre-line {
+    white-space: pre-line;
+  }
+
   .text-\[\#0b6b3a\] {
     color: #0b6b3a;
   }

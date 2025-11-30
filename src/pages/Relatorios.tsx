@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { FileText, Download, Calendar, Filter, TrendingUp, AlertCircle, Users, Building2, FileBarChart, Clock, ChevronRight, RefreshCw, Eye } from 'lucide-react';
+import { FileText, Download, Calendar, Building2, User, DollarSign, Clock, TrendingUp, AlertCircle, RefreshCw, FileBarChart, Filter, ChevronRight } from 'lucide-react';
 import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportUtils';
-import { mockContratos } from '../data/mockData';
 import { RelatorioPreview } from '../components/RelatorioPreview';
 
 interface RelatorioConfig {
@@ -34,6 +33,9 @@ export function Relatorios() {
     gestor: 'todos',
     fiscal: 'todos'
   });
+  
+  // Dados de exemplo temporários - no futuro virá da API
+  const mockContratos: any[] = [];
 
   const relatoriosPredefinidos: RelatorioConfig[] = [
     {
@@ -76,7 +78,7 @@ export function Relatorios() {
       id: 'contratos-gestor',
       titulo: 'Contratos por Gestor',
       descricao: 'Distribuição de contratos por gestor responsável',
-      icon: Users,
+      icon: User,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       categoria: 'gestao'
@@ -85,7 +87,7 @@ export function Relatorios() {
       id: 'contratos-fiscal',
       titulo: 'Contratos por Fiscal',
       descricao: 'Contratos designados para cada fiscal',
-      icon: Users,
+      icon: User,
       color: 'text-indigo-600',
       bgColor: 'bg-indigo-50',
       categoria: 'gestao'

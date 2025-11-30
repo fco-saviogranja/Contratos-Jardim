@@ -27,7 +27,7 @@ export function SolicitacaoCadastroModal({ isOpen, onClose }: SolicitacaoCadastr
 
     try {
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-1a8b02da/solicitacoes`,
+        `https://${projectId}.supabase.co/functions/v1/make-server/solicitacoes`,
         {
           method: 'POST',
           headers: {
@@ -45,9 +45,32 @@ export function SolicitacaoCadastroModal({ isOpen, onClose }: SolicitacaoCadastr
         }
       );
 
+      // Verificar se a resposta é JSON antes de fazer parse
+      const contentType = response.headers.get('content-type');
+      const isJson = contentType && contentType.includes('application/json');
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao enviar solicitação');
+        // Tratamento especial para erro 404
+        if (response.status === 404) {
+          throw new Error(
+            '⚠️ A API não está disponível ainda.\n\n' +
+            'A Edge Function "make-server" precisa ser deployada manualmente.\n\n' +
+            'Siga as instruções no arquivo /INSTRUCOES_DEPLOY.md para fazer o deploy.'
+          );
+        }
+
+        // Tentar obter mensagem de erro do JSON
+        if (isJson) {
+          const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
+          throw new Error(errorData.error || `Erro HTTP: ${response.status}`);
+        } else {
+          throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
+        }
+      }
+
+      // Verificar se a resposta de sucesso é JSON
+      if (!isJson) {
+        throw new Error('Resposta inesperada do servidor (não é JSON)');
       }
 
       setShowSuccess(true);
@@ -114,7 +137,7 @@ export function SolicitacaoCadastroModal({ isOpen, onClose }: SolicitacaoCadastr
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-900 text-sm">{error}</p>
+              <p className="text-red-900 text-sm whitespace-pre-line">{error}</p>
             </div>
           )}
 

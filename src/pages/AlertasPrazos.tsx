@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { mockAlertas } from '../data/mockData';
 import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportUtils';
 import { AlertTriangle, FileX, UserX, DollarSign, Eye, FileText, Settings, Download, ChevronDown, Bell } from 'lucide-react';
 
@@ -8,6 +7,10 @@ export function AlertasPrazos() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showEditNamesModal, setShowEditNamesModal] = useState(false);
+  
+  // Dados de exemplo temporários - no futuro virá da API
+  const mockAlertas: any[] = [];
+  
   const [limites, setLimites] = useState({
     diasAlertaCritico: 7,
     diasAlertaNormal: 30,

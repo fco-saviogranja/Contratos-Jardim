@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { mockContratos } from '../data/mockData';
 import { exportToCSV, exportToExcel, exportToPDF, ContratoExport } from '../utils/exportUtils';
 import { Search, Download, Eye, Edit, FileText, Paperclip, ChevronDown } from 'lucide-react';
 
@@ -11,6 +10,9 @@ export function MeusContratos({ onNavigate }: MeusContratosProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
 
+  // Dados de exemplo temporários - no futuro virá da API
+  const mockContratos: any[] = [];
+  
   // Para usar os contratos diretamente (no futuro será filtrado por usuário)
   const filteredContratos = mockContratos;
 

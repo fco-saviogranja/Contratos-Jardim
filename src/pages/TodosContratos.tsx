@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { mockContratos } from '../data/mockData';
 import { exportToCSV, exportToExcel, exportToPDF, ContratoExport } from '../utils/exportUtils';
 import { ImportarExcelModal } from '../components/ImportarExcelModal';
 import { Search, Download, Eye, Edit, FileText, ChevronDown, Plus, Upload } from 'lucide-react';
@@ -11,6 +10,9 @@ interface TodosContratosProps {
 export function TodosContratos({ onNavigate }: TodosContratosProps) {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  
+  // Dados de exemplo temporários - no futuro virá da API
+  const mockContratos: any[] = [];
   
   // Para usar os contratos diretamente (no futuro será com filtros)
   const filteredContratos = mockContratos;

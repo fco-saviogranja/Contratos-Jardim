@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserPlus, Mail, Lock, User, Building, Briefcase, FileText } from 'lucide-react';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { solicitacoes } from '../utils/api';
 
 export function SolicitarAcesso() {
   const [formData, setFormData] = useState({
@@ -50,43 +50,20 @@ export function SolicitarAcesso() {
     try {
       console.log('📤 Enviando solicitação de acesso...');
       
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-1a8b02da/solicitar-cadastro`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`
-          },
-          body: JSON.stringify({
-            nome: formData.nome,
-            email: formData.email,
-            senha: formData.senha,
-            confirmarSenha: formData.confirmarSenha,
-            cargo: formData.cargo,
-            setor: formData.setor,
-            justificativa: formData.justificativa
-          })
-        }
-      );
+      await solicitacoes.criar(formData);
+      
+      console.log('✅ Solicitação enviada com sucesso');
 
-      const result = await response.json();
-      console.log('📥 Resposta:', result);
-
-      if (result.success) {
-        setSuccess(true);
-        setFormData({
-          nome: '',
-          email: '',
-          senha: '',
-          confirmarSenha: '',
-          cargo: '',
-          setor: '',
-          justificativa: ''
-        });
-      } else {
-        setError(result.error || 'Erro ao enviar solicitação. Tente novamente.');
-      }
+      setSuccess(true);
+      setFormData({
+        nome: '',
+        email: '',
+        senha: '',
+        confirmarSenha: '',
+        cargo: '',
+        setor: '',
+        justificativa: ''
+      });
     } catch (err: any) {
       setError(err.message || 'Erro ao enviar solicitação. Tente novamente.');
       console.error('Erro na solicitação:', err);
