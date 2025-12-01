@@ -44,47 +44,75 @@ app.post("/make-server-1a8b02da/auth/setup-admin", async (c) => {
     console.log('🔧 [SETUP] Iniciando configuração do administrador...');
     const e = 'controleinterno@jardim.ce.gov.br', p = '@Gustavo25';
     
+    console.log('📋 [SETUP] Listando usuários existentes...');
     const { data: u } = await supabase.auth.admin.listUsers();
+    console.log(`📊 [SETUP] Total de usuários no sistema: ${u?.users?.length || 0}`);
+    
     const x = u?.users?.find(u => u.email === e);
     
     if (x) { 
-      console.log('⚠️ [SETUP] Administrador já existe. Removendo usuário antigo...');
-      await supabase.auth.admin.deleteUser(x.id); 
+      console.log(`⚠️ [SETUP] Administrador já existe (ID: ${x.id}). Removendo usuário antigo...`);
+      const { error: delError } = await supabase.auth.admin.deleteUser(x.id);
+      if (delError) {
+        console.error('❌ [SETUP] Erro ao deletar usuário antigo:', delError.message);
+      } else {
+        console.log('✅ [SETUP] Usuário antigo deletado com sucesso');
+      }
       await kv.del(`user:${x.id}`); 
+      console.log('✅ [SETUP] Dados do KV deletados');
     }
+    
+    console.log('📝 [SETUP] Criando novo usuário no Supabase Auth...');
+    console.log(`   Email: ${e}`);
+    console.log(`   Senha: ${p}`);
     
     const { data: d, error: err } = await supabase.auth.admin.createUser({ 
       email: e, 
       password: p, 
-      user_metadata: { nome: 'Gustavo Barros', perfil: 'admin', secretaria: 'CGM - Controladoria Geral' }, 
+      user_metadata: { nome: 'Gustavo Barros', perfil: 'Administrador CGM', secretaria: 'CGM - Controladoria Geral' }, 
       email_confirm: true 
     });
     
     if (err) {
       console.error('❌ [SETUP] Erro ao criar administrador no Supabase Auth:', err.message);
+      console.error('❌ [SETUP] Detalhes do erro:', JSON.stringify(err, null, 2));
       return c.json({ error: `Erro ao criar administrador: ${err.message}` }, 500);
     }
     
+    console.log('✅ [SETUP] Usuário criado no Supabase Auth!');
+    console.log(`   ID: ${d.user.id}`);
+    console.log(`   Email: ${d.user.email}`);
+    console.log(`   Email confirmado: ${d.user.email_confirmed_at ? 'Sim' : 'Não'}`);
+    
+    console.log('💾 [SETUP] Salvando dados no KV Store...');
     await kv.set(`user:${d.user.id}`, { 
       id: d.user.id, 
       email: e, 
       nome: 'Gustavo Barros', 
-      perfil: 'admin', 
+      perfil: 'Administrador CGM', 
       secretaria: 'CGM - Controladoria Geral', 
       situacao: 'ativo', 
       criadoEm: new Date().toISOString(), 
       ultimoAcesso: null 
     });
     
-    console.log('✅ [SETUP] Administrador configurado com sucesso!');
+    console.log('✅ [SETUP] Dados salvos no KV Store!');
+    console.log('🎉 [SETUP] Administrador configurado com sucesso!');
+    console.log('');
+    console.log('📋 CREDENCIAIS:');
+    console.log(`   Email: ${e}`);
+    console.log(`   Senha: ${p}`);
+    console.log('');
+    
     return c.json({ 
       success: true, 
       message: 'Administrador configurado com sucesso!', 
-      user: { id: d.user.id, email: e, nome: 'Gustavo Barros', perfil: 'admin' }, 
+      user: { id: d.user.id, email: e, nome: 'Gustavo Barros', perfil: 'Administrador CGM' }, 
       credentials: { email: e, password: p } 
     });
   } catch (error) { 
     console.error('❌ [SETUP] Erro inesperado no setup do administrador:', error.message);
+    console.error('❌ [SETUP] Stack trace:', error.stack);
     return c.json({ error: `Erro no setup: ${error.message}` }, 500); 
   }
 });
@@ -156,24 +184,94 @@ app.post("/make-server-1a8b02da/auth/login", async (c) => {
       return c.json({ error: "E-mail e senha são obrigatórios" }, 400);
     }
     
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    console.log(`🔐 [LOGIN] Tentativa de login: ${email}`);
+    
+    // IMPORTANTE: No servidor, precisamos listar todos os usuários e validar as credenciais
+    // pois signInWithPassword só funciona no cliente
+    const { data: usersData, error: listError } = await supabase.auth.admin.listUsers();
+    
+    if (listError) {
+      console.error('❌ [LOGIN] Erro ao listar usuários:', listError.message);
+      return c.json({ error: "Erro ao validar credenciais" }, 500);
+    }
+    
+    // Encontrar o usuário pelo email
+    const authUser = usersData?.users?.find(u => u.email === email);
+    
+    if (!authUser) {
+      console.warn(`⚠️ [LOGIN] Usuário não encontrado: ${email}`);
+      return c.json({ 
+        error: "Credenciais inválidas. Verifique seu e-mail e senha.",
+        hint: "Se você ainda não tem uma conta, execute o Setup Inicial ou solicite acesso."
+      }, 401);
+    }
+    
+    // Tentar fazer signIn usando o service role para validar a senha
+    // Criar um cliente temporário SEM o service role key para testar as credenciais
+    const testClient = createClient(
+      SUPABASE_URL ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+    
+    const { data, error } = await testClient.auth.signInWithPassword({ email, password });
     
     if (error) {
-      console.warn(`⚠️ [LOGIN] Credenciais inválidas para: ${email}`);
-      return c.json({ error: "Credenciais inválidas" }, 401);
+      console.warn(`⚠️ [LOGIN] Erro ao autenticar ${email}:`, error.message);
+      
+      // Mensagens de erro mais específicas
+      if (error.message.includes('Invalid login credentials')) {
+        return c.json({ 
+          error: "Credenciais inválidas. Verifique seu e-mail e senha.",
+          hint: "Se você ainda não tem uma conta, execute o Setup Inicial ou solicite acesso."
+        }, 401);
+      }
+      
+      if (error.message.includes('Email not confirmed')) {
+        return c.json({ 
+          error: "E-mail não confirmado. Entre em contato com o administrador.",
+        }, 401);
+      }
+      
+      return c.json({ 
+        error: "Credenciais inválidas",
+        details: error.message 
+      }, 401);
     }
     
-    // Atualizar último acesso
-    const u = await kv.get(`user:${data.user.id}`);
-    if (u) {
-      await kv.set(`user:${data.user.id}`, { ...u, ultimoAcesso: new Date().toISOString() });
+    // Buscar dados completos do usuário no KV
+    let userData = await kv.get(`user:${authUser.id}`);
+    
+    if (!userData) {
+      console.warn(`⚠️ [LOGIN] Usuário não encontrado no KV: ${authUser.id}, criando registro...`);
+      // Criar registro no KV se não existir
+      userData = {
+        id: authUser.id,
+        email: authUser.email,
+        nome: authUser.user_metadata?.nome || 'Usuário',
+        perfil: authUser.user_metadata?.perfil || 'gestor',
+        secretaria: authUser.user_metadata?.secretaria || 'Não definida',
+        situacao: 'ativo',
+        criadoEm: new Date().toISOString(),
+        ultimoAcesso: new Date().toISOString()
+      };
+      await kv.set(`user:${authUser.id}`, userData);
+    } else {
+      // Atualizar último acesso
+      userData.ultimoAcesso = new Date().toISOString();
+      await kv.set(`user:${authUser.id}`, userData);
     }
     
-    console.log(`✅ [LOGIN] Login bem-sucedido: ${email}`);
+    console.log(`✅ [LOGIN] Login bem-sucedido: ${email} (Perfil: ${userData.perfil})`);
     return c.json({ 
       success: true, 
       access_token: data.session.access_token, 
-      user: { id: data.user.id, email: data.user.email, ...data.user.user_metadata } 
+      user: { 
+        id: userData.id, 
+        email: userData.email, 
+        nome: userData.nome,
+        perfil: userData.perfil,
+        secretaria: userData.secretaria
+      } 
     });
   } catch (error) { 
     console.error('❌ [LOGIN] Erro inesperado ao fazer login:', error.message);
@@ -259,16 +357,20 @@ app.get("/make-server-1a8b02da/solicitacoes", async (c) => {
     }
     
     const d = await kv.get(`user:${u.id}`);
-    if (!d || d.perfil !== 'admin') {
+    const isAdmin = d && (d.perfil === 'admin' || d.perfil === 'Administrador CGM');
+    
+    if (!isAdmin) {
       console.warn(`⚠️ [SOLICITACOES] Acesso negado para usuário não-admin: ${u.email}`);
       return c.json({ error: "Acesso negado. Apenas administradores." }, 403);
     }
     
-    const s = await kv.getByPrefix("solicitacao:");
-    s.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime());
+    // Buscar todas as solicitações e filtrar apenas as pendentes
+    const todasSolicitacoes = await kv.getByPrefix("solicitacao:");
+    const solicitacoesPendentes = todasSolicitacoes.filter(s => s.status === 'pendente');
+    solicitacoesPendentes.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime());
     
-    console.log(`✅ [SOLICITACOES] Lista de solicitações retornada (${s.length} itens)`);
-    return c.json({ success: true, solicitacoes: s });
+    console.log(`✅ [SOLICITACOES] Lista de solicitações pendentes retornada (${solicitacoesPendentes.length} itens)`);
+    return c.json({ success: true, solicitacoes: solicitacoesPendentes });
   } catch (error) { 
     console.error('❌ [SOLICITACOES] Erro ao listar solicitações:', error.message);
     return c.json({ error: `Erro ao listar solicitações: ${error.message}` }, 500); 
@@ -281,7 +383,9 @@ app.post("/make-server-1a8b02da/solicitacoes/:id/aprovar", async (c) => {
     if (!u) return c.json({ error: "Não autorizado" }, 401);
     
     const d = await kv.get(`user:${u.id}`);
-    if (!d || d.perfil !== 'admin') {
+    const isAdmin = d && (d.perfil === 'admin' || d.perfil === 'Administrador CGM');
+    
+    if (!isAdmin) {
       console.warn(`⚠️ [APROVAR] Acesso negado para usuário não-admin: ${u.email}`);
       return c.json({ error: "Acesso negado. Apenas administradores." }, 403);
     }
@@ -357,7 +461,9 @@ app.post("/make-server-1a8b02da/solicitacoes/:id/rejeitar", async (c) => {
     if (!u) return c.json({ error: "Não autorizado" }, 401);
     
     const d = await kv.get(`user:${u.id}`);
-    if (!d || d.perfil !== 'admin') {
+    const isAdmin = d && (d.perfil === 'admin' || d.perfil === 'Administrador CGM');
+    
+    if (!isAdmin) {
       console.warn(`⚠️ [REJEITAR] Acesso negado para usuário não-admin: ${u.email}`);
       return c.json({ error: "Acesso negado. Apenas administradores." }, 403);
     }
@@ -390,6 +496,393 @@ app.post("/make-server-1a8b02da/solicitacoes/:id/rejeitar", async (c) => {
   } catch (error) { 
     console.error('❌ [REJEITAR] Erro inesperado ao rejeitar solicitação:', error.message);
     return c.json({ error: `Erro ao rejeitar solicitação: ${error.message}` }, 500); 
+  }
+});
+
+// ========================================
+// CONTRATOS
+// ========================================
+
+// ========================================
+// DEBUG (Rotas de utilidade para diagnóstico)
+// ========================================
+
+app.get("/make-server-1a8b02da/debug/list-auth-users", async (c) => {
+  try {
+    console.log('🔍 [DEBUG] Listando usuários do Supabase Auth...');
+    
+    const { data, error } = await supabase.auth.admin.listUsers();
+    
+    if (error) {
+      console.error('❌ [DEBUG] Erro ao listar usuários:', error.message);
+      return c.json({ error: `Erro ao listar usuários: ${error.message}` }, 500);
+    }
+    
+    console.log(`✅ [DEBUG] Total de usuários: ${data.users.length}`);
+    
+    return c.json({ 
+      success: true, 
+      users: data.users.map(u => ({
+        id: u.id,
+        email: u.email,
+        created_at: u.created_at,
+        email_confirmed_at: u.email_confirmed_at,
+        user_metadata: u.user_metadata
+      }))
+    });
+  } catch (error) {
+    console.error('❌ [DEBUG] Erro inesperado:', error.message);
+    return c.json({ error: `Erro: ${error.message}` }, 500);
+  }
+});
+
+app.post("/make-server-1a8b02da/debug/reset-password", async (c) => {
+  try {
+    const { email, novaSenha } = await c.req.json();
+    
+    if (!email || !novaSenha) {
+      return c.json({ error: "Email e nova senha são obrigatórios" }, 400);
+    }
+    
+    console.log(`🔑 [DEBUG] Resetando senha para: ${email}`);
+    
+    // Buscar o usuário pelo email
+    const { data: usersData } = await supabase.auth.admin.listUsers();
+    const user = usersData.users.find(u => u.email === email);
+    
+    if (!user) {
+      console.warn(`⚠️ [DEBUG] Usuário não encontrado: ${email}`);
+      return c.json({ error: "Usuário não encontrado" }, 404);
+    }
+    
+    // Atualizar a senha do usuário
+    const { data, error } = await supabase.auth.admin.updateUserById(user.id, {
+      password: novaSenha
+    });
+    
+    if (error) {
+      console.error(`❌ [DEBUG] Erro ao resetar senha: ${error.message}`);
+      return c.json({ error: `Erro ao resetar senha: ${error.message}` }, 500);
+    }
+    
+    console.log(`✅ [DEBUG] Senha resetada com sucesso para: ${email}`);
+    
+    return c.json({ 
+      success: true, 
+      message: "Senha resetada com sucesso",
+      user: {
+        id: data.user.id,
+        email: data.user.email
+      }
+    });
+  } catch (error) {
+    console.error('❌ [DEBUG] Erro inesperado:', error.message);
+    return c.json({ error: `Erro: ${error.message}` }, 500);
+  }
+});
+
+app.post("/make-server-1a8b02da/debug/check-user", async (c) => {
+  try {
+    const { email } = await c.req.json();
+    
+    if (!email) {
+      return c.json({ error: "Email é obrigatório" }, 400);
+    }
+    
+    console.log(`🔍 [DEBUG] Verificando usuário: ${email}`);
+    
+    // Buscar no Supabase Auth
+    const { data: usersData } = await supabase.auth.admin.listUsers();
+    const authUser = usersData.users.find(u => u.email === email);
+    
+    // Buscar no KV Store
+    const allUsers = await kv.getByPrefix("user:");
+    const kvUser = allUsers.find(u => u.email === email);
+    
+    console.log(`📊 [DEBUG] Auth: ${authUser ? 'EXISTE' : 'NÃO EXISTE'} | KV: ${kvUser ? 'EXISTE' : 'NÃO EXISTE'}`);
+    
+    return c.json({
+      success: true,
+      authUser: authUser ? {
+        id: authUser.id,
+        email: authUser.email,
+        created_at: authUser.created_at,
+        email_confirmed_at: authUser.email_confirmed_at,
+        user_metadata: authUser.user_metadata
+      } : null,
+      kvUser: kvUser || null
+    });
+  } catch (error) {
+    console.error('❌ [DEBUG] Erro inesperado:', error.message);
+    return c.json({ error: `Erro: ${error.message}` }, 500);
+  }
+});
+
+app.post("/make-server-1a8b02da/debug/fix-user", async (c) => {
+  try {
+    const { email, novaSenha } = await c.req.json();
+    
+    if (!email || !novaSenha) {
+      return c.json({ error: "Email e senha são obrigatórios" }, 400);
+    }
+    
+    console.log(`🔧 [DEBUG] Corrigindo usuário: ${email}`);
+    
+    // Buscar no KV Store
+    const allUsers = await kv.getByPrefix("user:");
+    const kvUser = allUsers.find(u => u.email === email);
+    
+    if (!kvUser) {
+      return c.json({ error: "Usuário não encontrado no KV Store" }, 404);
+    }
+    
+    // Verificar se existe no Auth
+    const { data: usersData } = await supabase.auth.admin.listUsers();
+    let authUser = usersData.users.find(u => u.email === email);
+    
+    if (authUser) {
+      // Já existe, só atualizar a senha
+      console.log(`✏️ [DEBUG] Usuário já existe no Auth, atualizando senha...`);
+      const { error } = await supabase.auth.admin.updateUserById(authUser.id, {
+        password: novaSenha
+      });
+      
+      if (error) {
+        throw new Error(`Erro ao atualizar senha: ${error.message}`);
+      }
+    } else {
+      // Não existe, criar
+      console.log(`➕ [DEBUG] Criando usuário no Supabase Auth...`);
+      const { data, error } = await supabase.auth.admin.createUser({
+        email: kvUser.email,
+        password: novaSenha,
+        user_metadata: {
+          nome: kvUser.nome,
+          perfil: kvUser.perfil,
+          secretaria: kvUser.secretaria
+        },
+        email_confirm: true
+      });
+      
+      if (error) {
+        throw new Error(`Erro ao criar usuário: ${error.message}`);
+      }
+      
+      authUser = data.user;
+      
+      // Atualizar o ID no KV se necessário
+      if (kvUser.id !== authUser.id) {
+        await kv.del(`user:${kvUser.id}`);
+        await kv.set(`user:${authUser.id}`, {
+          ...kvUser,
+          id: authUser.id
+        });
+      }
+    }
+    
+    console.log(`✅ [DEBUG] Usuário corrigido com sucesso!`);
+    
+    return c.json({
+      success: true,
+      message: "Usuário corrigido com sucesso",
+      user: {
+        id: authUser.id,
+        email: authUser.email,
+        nome: kvUser.nome,
+        perfil: kvUser.perfil
+      }
+    });
+  } catch (error) {
+    console.error('❌ [DEBUG] Erro ao corrigir usuário:', error.message);
+    return c.json({ error: `Erro: ${error.message}` }, 500);
+  }
+});
+
+app.post("/make-server-1a8b02da/debug/fix-all-users", async (c) => {
+  try {
+    console.log('🔧 [DEBUG] Corrigindo TODOS os usuários...');
+    
+    const senhaTemporaria = 'SenhaTemp123';
+    
+    // Buscar todos os usuários do KV
+    const allKvUsers = await kv.getByPrefix("user:");
+    console.log(`📊 [DEBUG] Total de usuários no KV: ${allKvUsers.length}`);
+    
+    // Buscar todos os usuários do Auth
+    const { data: usersData } = await supabase.auth.admin.listUsers();
+    const authUsers = usersData.users;
+    console.log(`📊 [DEBUG] Total de usuários no Auth: ${authUsers.length}`);
+    
+    const fixedUsers = [];
+    
+    for (const kvUser of allKvUsers) {
+      console.log(`🔍 [DEBUG] Processando: ${kvUser.email}`);
+      
+      let authUser = authUsers.find(u => u.email === kvUser.email);
+      
+      if (authUser) {
+        // Já existe, só atualizar a senha
+        console.log(`   ✏️ Atualizando senha...`);
+        const { error } = await supabase.auth.admin.updateUserById(authUser.id, {
+          password: senhaTemporaria
+        });
+        
+        if (error) {
+          console.error(`   ❌ Erro ao atualizar: ${error.message}`);
+          continue;
+        }
+      } else {
+        // Não existe, criar
+        console.log(`   ➕ Criando no Auth...`);
+        const { data, error } = await supabase.auth.admin.createUser({
+          email: kvUser.email,
+          password: senhaTemporaria,
+          user_metadata: {
+            nome: kvUser.nome,
+            perfil: kvUser.perfil,
+            secretaria: kvUser.secretaria
+          },
+          email_confirm: true
+        });
+        
+        if (error) {
+          console.error(`   ❌ Erro ao criar: ${error.message}`);
+          continue;
+        }
+        
+        authUser = data.user;
+        
+        // Atualizar o ID no KV se necessário
+        if (kvUser.id !== authUser.id) {
+          await kv.del(`user:${kvUser.id}`);
+          await kv.set(`user:${authUser.id}`, {
+            ...kvUser,
+            id: authUser.id
+          });
+        }
+      }
+      
+      console.log(`   ✅ OK!`);
+      
+      fixedUsers.push({
+        email: kvUser.email,
+        nome: kvUser.nome,
+        perfil: kvUser.perfil,
+        senhaTemporaria
+      });
+    }
+    
+    console.log(`✅ [DEBUG] Processo concluído! ${fixedUsers.length} usuários corrigidos.`);
+    
+    return c.json({
+      success: true,
+      message: `${fixedUsers.length} usuários corrigidos com sucesso`,
+      users: fixedUsers,
+      senhaTemporaria
+    });
+  } catch (error) {
+    console.error('❌ [DEBUG] Erro ao corrigir usuários:', error.message);
+    return c.json({ error: `Erro: ${error.message}` }, 500);
+  }
+});
+
+app.post("/make-server-1a8b02da/debug/change-profile", async (c) => {
+  try {
+    const { email, novoPerfil } = await c.req.json();
+    
+    if (!email || !novoPerfil) {
+      return c.json({ error: "Email e novo perfil são obrigatórios" }, 400);
+    }
+    
+    console.log(`🔧 [DEBUG] Alterando perfil de: ${email} para: ${novoPerfil}`);
+    
+    // Buscar no KV Store
+    const allUsers = await kv.getByPrefix("user:");
+    const kvUser = allUsers.find(u => u.email === email);
+    
+    if (!kvUser) {
+      return c.json({ error: "Usuário não encontrado" }, 404);
+    }
+    
+    const oldProfile = kvUser.perfil;
+    
+    // Atualizar no KV
+    await kv.set(`user:${kvUser.id}`, {
+      ...kvUser,
+      perfil: novoPerfil
+    });
+    
+    // Atualizar no Auth também
+    const { data: usersData } = await supabase.auth.admin.listUsers();
+    const authUser = usersData.users.find(u => u.email === email);
+    
+    if (authUser) {
+      await supabase.auth.admin.updateUserById(authUser.id, {
+        user_metadata: {
+          ...authUser.user_metadata,
+          perfil: novoPerfil
+        }
+      });
+    }
+    
+    console.log(`✅ [DEBUG] Perfil alterado: ${oldProfile} → ${novoPerfil}`);
+    
+    return c.json({
+      success: true,
+      message: "Perfil alterado com sucesso",
+      user: {
+        email,
+        nome: kvUser.nome,
+        perfil: novoPerfil
+      },
+      oldProfile
+    });
+  } catch (error) {
+    console.error('❌ [DEBUG] Erro ao alterar perfil:', error.message);
+    return c.json({ error: `Erro: ${error.message}` }, 500);
+  }
+});
+
+app.post("/make-server-1a8b02da/debug/test-login", async (c) => {
+  try {
+    const { email, password } = await c.req.json();
+    
+    if (!email || !password) {
+      return c.json({ error: "Email e senha são obrigatórios" }, 400);
+    }
+    
+    console.log(`🔐 [DEBUG] Testando login para: ${email}`);
+    
+    // Criar um cliente temporário SEM o service role key para testar as credenciais
+    const testClient = createClient(
+      SUPABASE_URL ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+    
+    const { data, error } = await testClient.auth.signInWithPassword({ email, password });
+    
+    if (error) {
+      console.warn(`⚠️ [DEBUG] Erro ao autenticar ${email}:`, error.message);
+      return c.json({ 
+        success: false,
+        error: error.message,
+        hint: "Senha incorreta ou usuário não existe"
+      });
+    }
+    
+    console.log(`✅ [DEBUG] Login bem-sucedido para: ${email}`);
+    
+    return c.json({
+      success: true,
+      message: "Login funcionou!",
+      user: {
+        id: data.user.id,
+        email: data.user.email
+      }
+    });
+  } catch (error) {
+    console.error('❌ [DEBUG] Erro inesperado:', error.message);
+    return c.json({ error: `Erro: ${error.message}` }, 500);
   }
 });
 
@@ -512,6 +1005,54 @@ app.delete("/make-server-1a8b02da/contratos/:id", async (c) => {
   }
 });
 
+// Deletar TODOS os contratos (apenas para admin)
+app.delete("/make-server-1a8b02da/contratos", async (c) => {
+  try {
+    const u = await auth(c);
+    if (!u) return c.json({ error: "Não autorizado" }, 401);
+    
+    const userData = await kv.get(`user:${u.id}`);
+    
+    // Verificar se é administrador (aceitar tanto 'admin' quanto 'Administrador CGM')
+    const isAdmin = userData && (userData.perfil === 'admin' || userData.perfil === 'Administrador CGM');
+    
+    if (!isAdmin) {
+      console.warn(`⚠️ [CONTRATOS] Tentativa de deletar todos os contratos por não-admin: ${u.email} (perfil: ${userData?.perfil})`);
+      return c.json({ error: "Acesso negado. Apenas administradores podem deletar todos os contratos." }, 403);
+    }
+    
+    console.log(`🔥 [CONTRATOS] Iniciando deleção de todos os contratos por ${u.email}...`);
+    
+    // Buscar todos os contratos
+    const contratos = await kv.getByPrefix("contrato:");
+    
+    console.log(`📊 [CONTRATOS] ${contratos.length} contratos encontrados para deletar`);
+    
+    if (contratos.length === 0) {
+      console.log('ℹ️ [CONTRATOS] Nenhum contrato encontrado para deletar');
+      return c.json({ success: true, message: "Nenhum contrato encontrado", deletados: 0 });
+    }
+    
+    // Deletar todos
+    const ids = contratos.map(c => c.id);
+    const keys = ids.map(id => `contrato:${id}`);
+    
+    console.log(`🗑️ [CONTRATOS] Deletando contratos com IDs:`, ids);
+    
+    await kv.mdel(keys);
+    
+    console.log(`✅ [CONTRATOS] ${contratos.length} contratos deletados com sucesso por ${u.email}`);
+    return c.json({ 
+      success: true, 
+      message: `${contratos.length} contrato(s) deletado(s) com sucesso`, 
+      deletados: contratos.length 
+    });
+  } catch (error) { 
+    console.error('❌ [CONTRATOS] Erro ao deletar todos os contratos:', error.message);
+    return c.json({ error: `Erro ao deletar contratos: ${error.message}` }, 500); 
+  }
+});
+
 // ========================================
 // USUÁRIOS
 // ========================================
@@ -588,6 +1129,201 @@ app.put("/make-server-1a8b02da/usuarios/:id", async (c) => {
   } catch (error) { 
     console.error('❌ [USUARIOS] Erro ao atualizar usuário:', error.message);
     return c.json({ error: `Erro ao atualizar usuário: ${error.message}` }, 500); 
+  }
+});
+
+// Deletar usuário
+app.delete("/make-server-1a8b02da/usuarios/:id", async (c) => {
+  try {
+    const u = await auth(c);
+    if (!u) return c.json({ error: "Não autorizado" }, 401);
+    
+    const id = c.req.param('id');
+    const e = await kv.get(`user:${id}`);
+    
+    if (!e) {
+      console.warn(`⚠️ [USUARIOS] Usuário não encontrado para exclusão: ${id}`);
+      return c.json({ error: "Usuário não encontrado" }, 404);
+    }
+    
+    // Não permitir excluir o administrador principal
+    if (e.email === 'controleinterno@jardim.ce.gov.br') {
+      console.warn(`⚠️ [USUARIOS] Tentativa de excluir administrador principal`);
+      return c.json({ error: "Não é permitido excluir o administrador principal" }, 403);
+    }
+    
+    // Excluir do KV Store
+    await kv.del(`user:${id}`);
+    
+    // Tentar excluir do Supabase Auth também
+    try {
+      const { error: deleteError } = await supabase.auth.admin.deleteUser(id);
+      if (deleteError) {
+        console.warn(`⚠️ [USUARIOS] Erro ao excluir usuário do Auth: ${deleteError.message}`);
+      } else {
+        console.log(`✅ [USUARIOS] Usuário excluído do Supabase Auth: ${id}`);
+      }
+    } catch (authError) {
+      console.warn(`⚠️ [USUARIOS] Erro ao excluir do Auth (ignorado): ${authError.message}`);
+    }
+    
+    console.log(`✅ [USUARIOS] Usuário excluído: ${e.email} (${id}) por ${u.email}`);
+    return c.json({ success: true, message: "Usuário excluído com sucesso" });
+  } catch (error) { 
+    console.error('❌ [USUARIOS] Erro ao excluir usuário:', error.message);
+    return c.json({ error: `Erro ao excluir usuário: ${error.message}` }, 500); 
+  }
+});
+
+// Atualizar perfil do próprio usuário
+app.put("/make-server-1a8b02da/usuarios/me/perfil", async (c) => {
+  try {
+    const u = await auth(c);
+    if (!u) return c.json({ error: "Não autorizado" }, 401);
+    
+    const userData = await kv.get(`user:${u.id}`);
+    if (!userData) {
+      console.warn(`⚠️ [PERFIL] Usuário não encontrado: ${u.id}`);
+      return c.json({ error: "Usuário não encontrado" }, 404);
+    }
+    
+    const { nome, secretaria, fotoPerfil, senhaAtual, novaSenha } = await c.req.json();
+    
+    // Se estiver alterando senha, validar senha atual
+    if (novaSenha) {
+      if (!senhaAtual) {
+        console.warn('⚠️ [PERFIL] Senha atual não fornecida');
+        return c.json({ error: "Senha atual é obrigatória para alterar a senha" }, 400);
+      }
+      
+      // Verificar senha atual
+      const { error: loginError } = await supabase.auth.signInWithPassword({
+        email: u.email,
+        password: senhaAtual
+      });
+      
+      if (loginError) {
+        console.warn(`⚠️ [PERFIL] Senha atual incorreta para ${u.email}`);
+        return c.json({ error: "Senha atual incorreta" }, 400);
+      }
+      
+      // Atualizar senha
+      const { error: updateError } = await supabase.auth.admin.updateUserById(u.id, {
+        password: novaSenha
+      });
+      
+      if (updateError) {
+        console.error(`❌ [PERFIL] Erro ao atualizar senha para ${u.email}:`, updateError.message);
+        return c.json({ error: `Erro ao atualizar senha: ${updateError.message}` }, 400);
+      }
+      
+      console.log(`✅ [PERFIL] Senha atualizada para ${u.email}`);
+    }
+    
+    // Atualizar dados no KV
+    const updated = {
+      ...userData,
+      nome: nome || userData.nome,
+      secretaria: secretaria || userData.secretaria,
+      fotoPerfil: fotoPerfil !== undefined ? fotoPerfil : userData.fotoPerfil,
+      atualizadoEm: new Date().toISOString()
+    };
+    
+    await kv.set(`user:${u.id}`, updated);
+    
+    // Atualizar metadata no Auth
+    if (nome || secretaria) {
+      await supabase.auth.admin.updateUserById(u.id, {
+        user_metadata: {
+          nome: updated.nome,
+          perfil: updated.perfil,
+          secretaria: updated.secretaria
+        }
+      });
+    }
+    
+    console.log(`✅ [PERFIL] Perfil atualizado para ${u.email}`);
+    return c.json({ success: true, usuario: updated });
+  } catch (error) {
+    console.error('❌ [PERFIL] Erro ao atualizar perfil:', error.message);
+    return c.json({ error: `Erro ao atualizar perfil: ${error.message}` }, 500);
+  }
+});
+
+// Upload de foto de perfil
+app.post("/make-server-1a8b02da/usuarios/me/foto", async (c) => {
+  try {
+    const u = await auth(c);
+    if (!u) return c.json({ error: "Não autorizado" }, 401);
+    
+    const body = await c.req.json();
+    const { foto, fileName } = body;
+    
+    if (!foto) {
+      console.warn('⚠️ [FOTO] Foto não fornecida');
+      return c.json({ error: "Foto não fornecida" }, 400);
+    }
+    
+    // Criar bucket se não existir
+    const bucketName = 'make-1a8b02da-avatars';
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
+    
+    if (!bucketExists) {
+      console.log(`📦 [FOTO] Criando bucket ${bucketName}...`);
+      const { error: createError } = await supabase.storage.createBucket(bucketName, {
+        public: true
+      });
+      
+      if (createError) {
+        console.error('❌ [FOTO] Erro ao criar bucket:', createError.message);
+        return c.json({ error: `Erro ao criar bucket: ${createError.message}` }, 500);
+      }
+    }
+    
+    // Converter base64 para buffer
+    const base64Data = foto.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+    
+    // Nome do arquivo
+    const fileExt = fileName?.split('.').pop() || 'jpg';
+    const filePath = `${u.id}/${Date.now()}.${fileExt}`;
+    
+    // Upload
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, buffer, {
+        contentType: `image/${fileExt}`,
+        upsert: true
+      });
+    
+    if (uploadError) {
+      console.error('❌ [FOTO] Erro ao fazer upload:', uploadError.message);
+      return c.json({ error: `Erro ao fazer upload: ${uploadError.message}` }, 500);
+    }
+    
+    // Obter URL pública
+    const { data: urlData } = supabase.storage
+      .from(bucketName)
+      .getPublicUrl(filePath);
+    
+    const fotoUrl = urlData.publicUrl;
+    
+    // Atualizar usuário com URL da foto
+    const userData = await kv.get(`user:${u.id}`);
+    const updated = {
+      ...userData,
+      fotoPerfil: fotoUrl,
+      atualizadoEm: new Date().toISOString()
+    };
+    
+    await kv.set(`user:${u.id}`, updated);
+    
+    console.log(`✅ [FOTO] Foto de perfil atualizada para ${u.email}`);
+    return c.json({ success: true, fotoUrl });
+  } catch (error) {
+    console.error('❌ [FOTO] Erro ao fazer upload da foto:', error.message);
+    return c.json({ error: `Erro ao fazer upload: ${error.message}` }, 500);
   }
 });
 
@@ -822,6 +1558,203 @@ app.get("/make-server-1a8b02da/dashboard/stats", async (c) => {
   } catch (error) { 
     console.error('❌ [DASHBOARD] Erro ao buscar estatísticas:', error.message);
     return c.json({ error: `Erro ao buscar estatísticas: ${error.message}` }, 500); 
+  }
+});
+
+// ========================================
+// LIMPEZA E REORGANIZAÇÃO DO SISTEMA
+// ========================================
+
+app.post("/make-server-1a8b02da/admin/limpar-usuarios", async (c) => {
+  try {
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('🗑️ LIMPEZA DE USUÁRIOS - INICIANDO');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+    
+    const adminEmail = 'controleinterno@jardim.ce.gov.br';
+    
+    // Passo 1: Listar todos os usuários do Supabase Auth
+    console.log('📋 [PASSO 1] Listando usuários do Supabase Auth...');
+    const { data: authData, error: listError } = await supabase.auth.admin.listUsers();
+    
+    if (listError) {
+      console.error('❌ Erro ao listar usuários:', listError.message);
+      return c.json({ error: `Erro ao listar usuários: ${listError.message}` }, 500);
+    }
+    
+    const todosUsuarios = authData?.users || [];
+    console.log(`   Total de usuários encontrados: ${todosUsuarios.length}`);
+    
+    // Passo 2: Excluir todos exceto o admin
+    const usuariosExcluidos = [];
+    const errosExclusao = [];
+    
+    console.log('');
+    console.log('🗑️ [PASSO 2] Excluindo usuários do Supabase Auth...');
+    
+    for (const usuario of todosUsuarios) {
+      if (usuario.email !== adminEmail) {
+        console.log(`   Excluindo: ${usuario.email} (ID: ${usuario.id})`);
+        
+        const { error: deleteError } = await supabase.auth.admin.deleteUser(usuario.id);
+        
+        if (deleteError) {
+          console.error(`   ❌ Erro ao excluir ${usuario.email}:`, deleteError.message);
+          errosExclusao.push({ email: usuario.email, erro: deleteError.message });
+        } else {
+          console.log(`   ✅ Excluído: ${usuario.email}`);
+          usuariosExcluidos.push(usuario.email);
+        }
+      } else {
+        console.log(`   ⏭️  Mantendo admin: ${usuario.email}`);
+      }
+    }
+    
+    // Passo 3: Limpar KV Store de usuários
+    console.log('');
+    console.log('🗑️ [PASSO 3] Limpando KV Store de usuários...');
+    
+    const kvUsuarios = await kv.getByPrefix('user:');
+    console.log(`   Usuários no KV Store: ${kvUsuarios.length}`);
+    
+    const kvExcluidos = [];
+    
+    for (const kvUser of kvUsuarios) {
+      if (kvUser.email !== adminEmail) {
+        await kv.del(`user:${kvUser.id}`);
+        console.log(`   ✅ Removido do KV: ${kvUser.email}`);
+        kvExcluidos.push(kvUser.email);
+      } else {
+        console.log(`   ⏭️  Mantendo no KV: ${kvUser.email}`);
+      }
+    }
+    
+    // Passo 4: Garantir que o admin está correto
+    console.log('');
+    console.log('✅ [PASSO 4] Verificando usuário administrador...');
+    
+    const adminUser = todosUsuarios.find(u => u.email === adminEmail);
+    
+    if (!adminUser) {
+      console.warn('⚠️ Admin não encontrado! Recriando...');
+      
+      const { data: newAdmin, error: createError } = await supabase.auth.admin.createUser({
+        email: adminEmail,
+        password: '@Gustavo25',
+        email_confirm: true,
+        user_metadata: {
+          nome: 'Gustavo Barros',
+          perfil: 'Administrador CGM',
+          secretaria: 'CGM - Controladoria Geral'
+        }
+      });
+      
+      if (createError) {
+        console.error('❌ Erro ao criar admin:', createError.message);
+        return c.json({ error: `Erro ao criar admin: ${createError.message}` }, 500);
+      }
+      
+      // Criar no KV Store
+      const adminData = {
+        id: newAdmin.user.id,
+        email: adminEmail,
+        nome: 'Gustavo Barros',
+        perfil: 'Administrador CGM',
+        secretaria: 'CGM - Controladoria Geral',
+        criadoEm: new Date().toISOString()
+      };
+      
+      await kv.set(`user:${newAdmin.user.id}`, adminData);
+      
+      console.log('✅ Admin recriado com sucesso!');
+    } else {
+      console.log('✅ Admin encontrado:', adminUser.email);
+      
+      // Verificar e atualizar KV Store
+      const kvAdmin = await kv.get(`user:${adminUser.id}`);
+      
+      if (!kvAdmin) {
+        console.log('⚠️ Admin não está no KV Store. Adicionando...');
+        
+        const adminData = {
+          id: adminUser.id,
+          email: adminEmail,
+          nome: 'Gustavo Barros',
+          perfil: 'Administrador CGM',
+          secretaria: 'CGM - Controladoria Geral',
+          criadoEm: new Date().toISOString()
+        };
+        
+        await kv.set(`user:${adminUser.id}`, adminData);
+        console.log('✅ Admin adicionado ao KV Store');
+      } else {
+        // Atualizar perfil se necessário
+        if (kvAdmin.perfil !== 'Administrador CGM') {
+          console.log('⚠️ Perfil do admin incorreto. Corrigindo...');
+          kvAdmin.perfil = 'Administrador CGM';
+          await kv.set(`user:${adminUser.id}`, kvAdmin);
+          console.log('✅ Perfil do admin corrigido');
+        }
+      }
+      
+      // Atualizar metadados no Supabase Auth
+      await supabase.auth.admin.updateUserById(adminUser.id, {
+        user_metadata: {
+          nome: 'Gustavo Barros',
+          perfil: 'Administrador CGM',
+          secretaria: 'CGM - Controladoria Geral'
+        }
+      });
+      
+      console.log('✅ Metadados do admin atualizados');
+    }
+    
+    // Resumo final
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('✅ LIMPEZA CONCLUÍDA COM SUCESSO!');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+    console.log('📊 RESUMO:');
+    console.log(`   Usuários excluídos do Auth: ${usuariosExcluidos.length}`);
+    console.log(`   Usuários excluídos do KV: ${kvExcluidos.length}`);
+    console.log(`   Erros de exclusão: ${errosExclusao.length}`);
+    console.log('');
+    console.log('👤 USUÁRIO RESTANTE:');
+    console.log(`   Email: ${adminEmail}`);
+    console.log(`   Nome: Gustavo Barros`);
+    console.log(`   Perfil: Administrador CGM`);
+    console.log(`   Senha: @Gustavo25`);
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+    
+    return c.json({ 
+      success: true, 
+      message: 'Limpeza concluída com sucesso!',
+      resumo: {
+        usuariosExcluidosAuth: usuariosExcluidos.length,
+        usuariosExcluidosKV: kvExcluidos.length,
+        erros: errosExclusao.length,
+        admin: {
+          email: adminEmail,
+          nome: 'Gustavo Barros',
+          perfil: 'Administrador CGM',
+          senha: '@Gustavo25'
+        }
+      },
+      detalhes: {
+        excluidos: usuariosExcluidos,
+        erros: errosExclusao
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ [LIMPAR-USUARIOS] Erro inesperado:', error.message);
+    console.error('❌ Stack trace:', error.stack);
+    return c.json({ error: `Erro na limpeza: ${error.message}` }, 500);
   }
 });
 

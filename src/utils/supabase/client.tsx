@@ -1,8 +1,8 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { projectId, publicAnonKey } from './info';
 
-const SUPABASE_URL = `https://${projectId}.supabase.co`;
-
-export function createClient() {
-  return createSupabaseClient(SUPABASE_URL, publicAnonKey);
-}
+// Cliente Supabase para o frontend
+export const supabase = createClient(
+  `https://${projectId}.supabase.co`,
+  publicAnonKey
+);

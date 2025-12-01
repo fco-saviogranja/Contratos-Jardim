@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Settings, Globe, Bell, Shield, Mail } from 'lucide-react';
+import { Settings, Globe, Bell, Shield, Mail, Trash2, AlertTriangle } from 'lucide-react';
+import { contratos as contratosAPI } from '../utils/api';
+import { toast } from 'sonner';
 
 export function ConfiguracoesGerais() {
   const [formatoData, setFormatoData] = useState('dd/mm/aaaa');
@@ -13,6 +15,43 @@ export function ConfiguracoesGerais() {
   const [sessaoUnica, setSessaoUnica] = useState(false);
   const [confirmarExclusao, setConfirmarExclusao] = useState(true);
   const [emailAuto, setEmailAuto] = useState(true);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleLimparContratos = async () => {
+    if (!window.confirm('⚠️ ATENÇÃO: Você está prestes a deletar TODOS os contratos do sistema!\n\nEsta ação é IRREVERSÍVEL e não pode ser desfeita.\n\nTodos os contratos cadastrados serão permanentemente excluídos.\n\nDeseja realmente continuar?')) {
+      return;
+    }
+
+    if (!window.confirm('⚠️ CONFIRMAÇÃO FINAL\n\nDigite no console: "Tenho certeza"\n\nApenas clique OK se você realmente tem certeza absoluta desta ação.')) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      toast.loading('Deletando todos os contratos...');
+      
+      const response = await contratosAPI.deleteAll();
+      
+      if (response.success) {
+        toast.success(`✅ ${response.deletados} contrato(s) deletado(s) com sucesso!`);
+        console.log('✅ Limpeza concluída:', response);
+        
+        // Recarregar página após 2 segundos
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        throw new Error('Falha ao deletar contratos');
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao limpar contratos:', error);
+      toast.error(error.message || 'Erro ao deletar contratos');
+    } finally {
+      setDeleting(false);
+      setShowConfirmDelete(false);
+    }
+  };
 
   return (
     <div className="space-y-4 max-w-[1400px] mx-auto">
@@ -300,6 +339,62 @@ export function ConfiguracoesGerais() {
           Salvar configurações
         </button>
       </div>
+
+      {/* Zona de Perigo - Apenas para Administradores */}
+      <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6 mt-8">
+        <div className="flex items-start gap-4">
+          <AlertTriangle className="size-6 text-red-600 flex-shrink-0 mt-1" />
+          <div className="flex-1">
+            <h2 className="text-red-900 font-medium mb-2 flex items-center gap-2">
+              Zona de Perigo
+              <span className="text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded">Admin</span>
+            </h2>
+            <p className="text-red-800 text-sm mb-4">
+              Ações nesta seção são <strong>irreversíveis</strong> e devem ser usadas com extremo cuidado. Todos os dados deletados não podem ser recuperados.
+            </p>
+            <button
+              onClick={() => setShowConfirmDelete(true)}
+              disabled={deleting}
+              className="px-6 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash2 className="size-4" />
+              {deleting ? 'Deletando...' : 'Deletar Todos os Contratos'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Modal de confirmação de exclusão */}
+      {showConfirmDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-lg shadow-lg">
+            <div className="flex items-center gap-4 mb-4">
+              <AlertTriangle className="size-6 text-red-500" />
+              <h2 className="text-[#102a43] font-medium">
+                Confirmação de exclusão
+              </h2>
+            </div>
+            <p className="text-gray-600 text-sm">
+              Você está prestes a deletar todos os contratos do sistema. Esta ação é irreversível e não pode ser desfeita. Todos os contratos cadastrados serão permanentemente excluídos.
+            </p>
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                className="px-6 py-2 border border-gray-300 rounded-md text-[#102a43] text-sm hover:bg-gray-50 font-medium"
+                onClick={() => setShowConfirmDelete(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="px-6 py-2 bg-red-500 text-white rounded-md text-sm hover:bg-red-600 font-medium"
+                onClick={handleLimparContratos}
+                disabled={deleting}
+              >
+                {deleting ? 'Deletando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

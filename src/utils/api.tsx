@@ -1,4 +1,5 @@
 import { projectId, publicAnonKey } from './supabase/info';
+import { supabase } from './supabase/client';
 
 // URLs do backend
 const SUPABASE_URL = `https://${projectId}.supabase.co`;
@@ -15,8 +16,17 @@ let authState: AuthState = {
   user: JSON.parse(localStorage.getItem('user') || 'null')
 };
 
+// Função para recarregar authState do localStorage
+function refreshAuthState() {
+  authState.accessToken = localStorage.getItem('access_token');
+  authState.user = JSON.parse(localStorage.getItem('user') || 'null');
+}
+
 // Função auxiliar para fazer requisições
-async function apiRequest(endpoint: string, options: RequestInit = {}) {
+export async function apiRequest(endpoint: string, options: RequestInit = {}) {
+  // Sempre recarregar o estado antes de fazer uma requisição
+  refreshAuthState();
+  
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...options.headers,
@@ -25,23 +35,67 @@ async function apiRequest(endpoint: string, options: RequestInit = {}) {
   // Adicionar token se estiver autenticado
   if (authState.accessToken) {
     headers['Authorization'] = `Bearer ${authState.accessToken}`;
+    console.log('🔑 Usando access_token para autenticação');
   } else {
     headers['Authorization'] = `Bearer ${publicAnonKey}`;
+    console.log('🔓 Usando publicAnonKey para autenticação');
   }
 
-  const response = await fetch(`${SERVER_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  console.log('🌐 Requisição:', `${SERVER_URL}${endpoint}`);
 
-  const data = await response.json();
+  try {
+    const response = await fetch(`${SERVER_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
 
-  if (!response.ok) {
-    console.error(`❌ Erro na requisição ${endpoint}:`, data);
-    throw new Error(data.error || 'Erro na requisição');
+    console.log('📡 Status da resposta:', response.status, response.statusText);
+
+    // Verificar se a resposta é JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error('❌ Resposta não é JSON:', text);
+      throw new Error(`Erro no servidor: resposta inválida (${response.status}). O servidor pode não estar rodando corretamente.`);
+    }
+
+    const data = await response.json();
+    console.log('📥 Dados recebidos:', data);
+
+    // Verificar se é erro de autenticação (token inválido/expirado)
+    // IMPORTANTE: Não tratar como erro de sessão se for uma requisição de login
+    const isLoginRequest = endpoint === '/auth/login' || endpoint === '/auth/setup-admin' || endpoint === '/solicitar-cadastro';
+    
+    if ((response.status === 401 || (data.code === 401 && data.message === 'Invalid JWT')) && !isLoginRequest) {
+      console.warn('⚠️ Token inválido ou expirado (401)');
+      console.warn('⚠️ Detalhes:', data);
+      
+      // Limpar sessão se o token estiver inválido
+      authState.accessToken = null;
+      authState.user = null;
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user');
+      
+      // Não forçar reload, deixar o componente tratar
+      throw new Error('Sessão expirada. Por favor, faça login novamente.');
+    }
+
+    if (!response.ok) {
+      console.error(`❌ Erro na requisição ${endpoint}:`, data);
+      throw new Error(data.error || data.message || 'Erro na requisição');
+    }
+
+    return data;
+  } catch (error: any) {
+    console.error('❌ Erro na requisição:', error);
+    
+    // Tratar erro de conexão
+    if (error.message === 'Failed to fetch') {
+      throw new Error('Não foi possível conectar ao servidor. Verifique se a Edge Function está ativa.');
+    }
+    
+    throw error;
   }
-
-  return data;
 }
 
 // ========================================
@@ -85,14 +139,36 @@ export const auth = {
   },
 
   async login(email: string, password: string) {
-    console.log('🔑 Fazendo login...');
+    console.log('🔑 Fazendo login via servidor...');
     console.log('📧 E-mail:', email);
     
     try {
-      const data = await apiRequest('/auth/login', {
+      // Fazer login através do servidor (não diretamente no Supabase)
+      const response = await fetch(`${SERVER_URL}/auth/login`, {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${publicAnonKey}`
+        },
+        body: JSON.stringify({ email, password })
       });
+      
+      const data = await response.json();
+      
+      if (!response.ok || !data.success) {
+        console.error('❌ Erro ao fazer login:', data.error || 'Erro desconhecido');
+        console.error('💡 Dica:', data.hint || '');
+        throw new Error(data.error || 'Credenciais inválidas');
+      }
+      
+      if (!data.access_token || !data.user) {
+        console.error('❌ Token ou usuário não retornados');
+        throw new Error('Erro ao fazer login');
+      }
+      
+      console.log('✅ Login bem-sucedido via servidor!');
+      console.log('👤 Usuário:', data.user.email);
+      console.log('🎭 Perfil:', data.user.perfil);
       
       // Salvar token e usuário
       authState.accessToken = data.access_token;
@@ -101,10 +177,15 @@ export const auth = {
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
       
-      console.log('✅ Login bem-sucedido:', data.user);
-      return data;
-    } catch (error) {
-      console.error('❌ Erro ao fazer login:', error);
+      console.log('✅ Dados do usuário salvos:', data.user);
+      
+      return {
+        success: true,
+        access_token: data.access_token,
+        user: data.user
+      };
+    } catch (error: any) {
+      console.error('❌ Erro ao fazer login:', error.message);
       throw error;
     }
   },
@@ -162,6 +243,26 @@ export const contratos = {
     return await apiRequest(`/contratos/${id}`, {
       method: 'DELETE',
     });
+  },
+
+  async deleteAll() {
+    console.log('🗑️💥 Deletando TODOS os contratos...');
+    return await apiRequest('/contratos', {
+      method: 'DELETE',
+    });
+  }
+};
+
+// ========================================
+// LIMPEZA DE DADOS (apenas admin)
+// ========================================
+
+export const admin = {
+  async limparTodosDados() {
+    console.log('🗑️ Limpando TODOS os contratos e alertas...');
+    return await apiRequest('/limpar-dados', {
+      method: 'POST',
+    });
   }
 };
 
@@ -195,6 +296,13 @@ export const usuarios = {
     return await apiRequest(`/usuarios/${id}`, {
       method: 'PUT',
       body: JSON.stringify(userData),
+    });
+  },
+
+  async delete(id: string) {
+    console.log(`🗑️ Deletando usuário ${id}...`);
+    return await apiRequest(`/usuarios/${id}`, {
+      method: 'DELETE',
     });
   },
 
@@ -259,6 +367,28 @@ export const usuarios = {
     return await apiRequest(`/secretarias/${id}`, {
       method: 'DELETE',
     });
+  },
+
+  async updateMeuPerfil(data: {
+    nome?: string;
+    secretaria?: string;
+    fotoPerfil?: string;
+    senhaAtual?: string;
+    novaSenha?: string;
+  }) {
+    console.log('✏️ Atualizando meu perfil...');
+    return await apiRequest('/usuarios/me/perfil', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async uploadFotoPerfil(foto: string, fileName: string) {
+    console.log('📸 Fazendo upload de foto de perfil...');
+    return await apiRequest('/usuarios/me/foto', {
+      method: 'POST',
+      body: JSON.stringify({ foto, fileName }),
+    });
   }
 };
 
@@ -315,6 +445,9 @@ export const solicitacoes = {
     justificativa: string;
   }) {
     console.log('📝 Enviando solicitação de cadastro...');
+    console.log('🌐 URL:', `${SERVER_URL}/solicitar-cadastro`);
+    console.log('📦 Dados:', data);
+    
     try {
       const response = await fetch(`${SERVER_URL}/solicitar-cadastro`, {
         method: 'POST',
@@ -334,9 +467,15 @@ export const solicitacoes = {
 
       console.log('✅ Solicitação enviada com sucesso');
       return result;
-    } catch (error) {
-      console.error('❌ Erro na requisição:', error);
-      throw error;
+    } catch (error: any) {
+      console.error('❌ Erro na requisição de solicitação:', error);
+      
+      // Mensagem de erro mais detalhada
+      if (error.message === 'Failed to fetch') {
+        throw new Error('Não foi possível conectar ao servidor. Verifique sua conexão com a internet ou tente novamente mais tarde.');
+      }
+      
+      throw new Error(error.message || 'Erro ao solicitar cadastro. Tente novamente.');
     }
   }
 };

@@ -1,16 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportUtils';
 import { AlertTriangle, FileX, UserX, DollarSign, Eye, FileText, Settings, Download, ChevronDown, Bell } from 'lucide-react';
+import { alertas as alertasAPI } from '../utils/api';
+import { MOCK_ALERTAS } from '../utils/mockData';
+import { useSecretarias } from '../hooks/useSecretarias';
 
 export function AlertasPrazos() {
   const [activeFilter, setActiveFilter] = useState<string>('todos');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showEditNamesModal, setShowEditNamesModal] = useState(false);
+  const [alertas, setAlertas] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { secretarias } = useSecretarias();
   
-  // Dados de exemplo temporários - no futuro virá da API
-  const mockAlertas: any[] = [];
-  
+  // Carregar alertas da API
+  useEffect(() => {
+    const carregarAlertas = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('🔄 Carregando alertas da API...');
+        const response = await alertasAPI.getAll();
+        
+        if (response.success && response.alertas) {
+          console.log(`✅ ${response.alertas.length} alertas carregados da API`);
+          setAlertas(response.alertas);
+        } else {
+          console.warn('⚠️ Resposta da API sem alertas');
+          setAlertas([]);
+        }
+      } catch (err) {
+        console.error('❌ Erro ao carregar alertas da API:', err);
+        console.log('🔄 Usando dados mock como fallback');
+        setError('Não foi possível conectar ao servidor. Usando dados de exemplo.');
+        setAlertas(MOCK_ALERTAS);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    carregarAlertas();
+  }, []);
+
   const [limites, setLimites] = useState({
     diasAlertaCritico: 7,
     diasAlertaNormal: 30,
@@ -75,12 +108,12 @@ export function AlertasPrazos() {
   };
 
   const getAlertasByTipo = (tipo: string) => {
-    return mockAlertas.filter(a => a.tipo === tipo);
+    return alertas.filter(a => a.tipo === tipo);
   };
 
   // Preparar dados para exportação
   const prepararDadosExportacao = () => {
-    return mockAlertas.map(alerta => ({
+    return alertas.map(alerta => ({
       numero: alerta.contrato,
       objeto: alerta.mensagem,
       contratado: '',
@@ -136,7 +169,7 @@ export function AlertasPrazos() {
       </div>
 
       {/* Estado vazio quando não há alertas */}
-      {mockAlertas.length === 0 ? (
+      {alertas.length === 0 ? (
         <div className="bg-white rounded-lg p-12">
           <div className="flex flex-col items-center justify-center text-center max-w-md mx-auto">
             <Bell className="size-16 text-gray-300 mb-4" />
@@ -184,9 +217,9 @@ export function AlertasPrazos() {
             </label>
             <select className="w-full px-3 py-2 bg-white border border-gray-200 rounded-md text-[#102a43] text-sm">
               <option>Todas</option>
-              <option>Secretaria de Saúde</option>
-              <option>Secretaria de Educação</option>
-              <option>Secretaria de Obras</option>
+              {secretarias.map(secretaria => (
+                <option key={secretaria.id}>{secretaria.nome}</option>
+              ))}
             </select>
           </div>
           

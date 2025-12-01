@@ -8,6 +8,7 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   loading: boolean;
+  checkSession: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -15,6 +16,23 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Função para verificar se a sessão ainda é válida
+  const checkSession = (): boolean => {
+    const savedUser = auth.getUser();
+    const hasToken = auth.isAuthenticated();
+    
+    if (!savedUser || !hasToken) {
+      // Limpar sessão se não houver dados
+      if (user) {
+        console.warn('⚠️ Sessão inválida detectada, fazendo logout automático...');
+        setUser(null);
+      }
+      return false;
+    }
+    
+    return true;
+  };
 
   // Verificar se já existe sessão ao carregar
   useEffect(() => {
@@ -25,9 +43,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
+  // Verificar periodicamente se a sessão ainda é válida (a cada 5 segundos)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Apenas verificar se há um usuário logado
+      if (user) {
+        const isValid = checkSession();
+        if (!isValid) {
+          console.warn('⚠️ Sessão expirou, fazendo logout...');
+          logout();
+        }
+      }
+    }, 5000); // 5 segundos
+
+    return () => clearInterval(interval);
+  }, [user]);
+
   const login = async (email: string, senha: string): Promise<boolean> => {
     try {
       console.log('Tentando login com backend Supabase...');
+      
+      // Limpar qualquer sessão antiga antes de fazer login
+      auth.logout();
       
       const result = await auth.login(email, senha);
       
@@ -50,9 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('Login falhou - credenciais inválidas');
       return false;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao fazer login:', error);
-      return false;
+      
+      // Sempre limpar sessão em caso de erro
+      auth.logout();
+      setUser(null);
+      
+      throw error;
     }
   };
 
@@ -63,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, loading, checkSession }}>
       {children}
     </AuthContext.Provider>
   );

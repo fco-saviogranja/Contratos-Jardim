@@ -1,23 +1,282 @@
-import React, { useState } from 'react';
-import { FileText, AlertTriangle, TrendingUp, Users, Calendar, Eye, Download, ChevronRight, Clock, Bell } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileText, AlertTriangle, TrendingUp, Users, Calendar, Download, ChevronRight, Clock, Bell } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
+import { contratos as contratosAPI, alertas as alertasAPI } from '../utils/api';
+import { MOCK_CONTRATOS, MOCK_ALERTAS } from '../utils/mockData';
+import { useSecretarias } from '../hooks/useSecretarias';
+import { useAuth } from '../contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface DashboardProps {
   onNavigate: (page: string) => void;
 }
 
+// Função auxiliar para calcular dias até o vencimento
+const calcularDiasRestantes = (dataFinal: string): number => {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const vencimento = new Date(dataFinal);
+  vencimento.setHours(0, 0, 0, 0);
+  const diff = vencimento.getTime() - hoje.getTime();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+};
+
+// Função auxiliar para obter o status do contrato
+const getStatusContrato = (dataFinal: string) => {
+  const diasRestantes = calcularDiasRestantes(dataFinal);
+  if (diasRestantes < 0) return 'vencido';
+  if (diasRestantes <= 90) return 'alerta';
+  return 'vigente';
+};
+
 export function Dashboard({ onNavigate }: DashboardProps) {
+  const { checkSession, logout } = useAuth();
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     periodo: '90',
     secretaria: 'todas',
-    gestor: 'todos',
-    situacao: 'todas'
+    gestor: 'todos'
   });
+  const [contratos, setContratos] = useState<any[]>([]);
+  const [alertas, setAlertas] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { secretarias } = useSecretarias();
 
-  // Por enquanto, sempre mostrar o dashboard com dados estáticos para demonstração
-  // No futuro, isso virá da API
-  const temContratos = true;
+  // Carregar dados da API
+  useEffect(() => {
+    const carregarDados = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        console.log('🔄 Carregando dados do Dashboard...');
+        
+        // Buscar contratos e alertas em paralelo
+        const [contratosResponse, alertasResponse] = await Promise.all([
+          contratosAPI.getAll().catch(err => {
+            console.warn('⚠️ Erro ao buscar contratos:', err);
+            
+            // Se for erro de autenticação, propagar o erro
+            if (err.message?.includes('expirada') || err.message?.includes('Sessão')) {
+              throw err;
+            }
+            
+            console.warn('⚠️ Usando dados mock para contratos');
+            return { success: true, contratos: MOCK_CONTRATOS };
+          }),
+          alertasAPI.getAll().catch(err => {
+            console.warn('⚠️ Erro ao buscar alertas:', err);
+            
+            // Se for erro de autenticação, propagar o erro
+            if (err.message?.includes('expirada') || err.message?.includes('Sessão')) {
+              throw err;
+            }
+            
+            console.warn('⚠️ Usando dados mock para alertas');
+            return { success: true, alertas: MOCK_ALERTAS };
+          })
+        ]);
+        
+        const contratosData = contratosResponse.success ? contratosResponse.contratos : [];
+        const alertasData = alertasResponse.success ? alertasResponse.alertas : [];
+        
+        console.log(`✅ Dashboard carregado: ${contratosData.length} contratos, ${alertasData.length} alertas`);
+        setContratos(contratosData);
+        setAlertas(alertasData);
+      } catch (err: any) {
+        console.error('❌ Erro ao carregar dados do Dashboard:', err);
+        
+        // Se for erro de autenticação, apenas usar dados vazios
+        // O AuthProvider vai redirecionar automaticamente
+        if (err.message?.includes('expirada') || err.message?.includes('Sessão')) {
+          setContratos([]);
+          setAlertas([]);
+          return;
+        }
+        
+        setError('Não foi possível conectar ao servidor.');
+        setContratos([]);
+        setAlertas([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    carregarDados();
+  }, []);
+
+  const handleLimparFiltros = () => {
+    setFilters({
+      periodo: '90',
+      secretaria: 'todas',
+      gestor: 'todos'
+    });
+  };
+
+  const handleAplicarFiltros = () => {
+    // Aqui seria feita a chamada à API com os filtros
+    console.log('Aplicando filtros:', filters);
+    // No futuro: fetchContratos(filters);
+  };
+
+  // Verificar se há contratos
+  const temContratos = contratos.length > 0;
+
+  // Calcular métricas reais baseadas nos contratos
+  const contratosVigentes = contratos.filter(c => getStatusContrato(c.dataFinal) === 'vigente');
+  const contratosEmAlerta = contratos.filter(c => getStatusContrato(c.dataFinal) === 'alerta');
+  const contratosVencidos = contratos.filter(c => getStatusContrato(c.dataFinal) === 'vencido');
+  const alertasPendentes = alertas.filter(a => a.status === 'pendente' || !a.status);
+
+  // Filtrar contratos próximos do vencimento para a tabela
+  const contratosProximosVencimento = [...contratosEmAlerta]
+    .sort((a, b) => calcularDiasRestantes(a.dataFinal) - calcularDiasRestantes(b.dataFinal))
+    .slice(0, 4);
+
+  // Filtrar contratos vencidos para a tabela
+  const contratosVencidosLista = [...contratosVencidos]
+    .sort((a, b) => new Date(a.dataFinal).getTime() - new Date(b.dataFinal).getTime())
+    .slice(0, 3);
+
+  // Calcular dados para o gráfico de linha do tempo (últimos 6 meses)
+  const calcularTimelineData = () => {
+    const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const hoje = new Date();
+    const timelineData = [];
+
+    // Calcular projeção para os próximos 6 meses
+    for (let i = 0; i < 6; i++) {
+      const mesInicio = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+      const mesFim = new Date(hoje.getFullYear(), hoje.getMonth() + i + 1, 0);
+      const mesNome = meses[mesInicio.getMonth()];
+      
+      // Contar contratos que vão vencer neste mês
+      const contratosDoMes = contratos.filter(contrato => {
+        const dataVencimento = new Date(contrato.dataFinal);
+        return dataVencimento >= mesInicio && dataVencimento <= mesFim;
+      });
+
+      // Calcular status dos contratos neste mês
+      let vigentesCount = 0;
+      let alertaCount = 0;
+      let vencidosCount = 0;
+
+      contratosDoMes.forEach(contrato => {
+        const diasRestantes = calcularDiasRestantes(contrato.dataFinal);
+        if (diasRestantes < 0) {
+          vencidosCount++;
+        } else if (diasRestantes <= 30) {
+          alertaCount++;
+        } else {
+          vigentesCount++;
+        }
+      });
+
+      // Adicionar contratos que ainda estarão vigentes (não vencem neste mês)
+      const contratosVigentesAposEsteMes = contratos.filter(contrato => {
+        const dataVencimento = new Date(contrato.dataFinal);
+        return dataVencimento > mesFim;
+      }).length;
+
+      timelineData.push({
+        mes: mesNome,
+        vigentes: vigentesCount + contratosVigentesAposEsteMes,
+        emAlerta: alertaCount,
+        vencidos: vencidosCount
+      });
+    }
+
+    return timelineData;
+  };
+
+  // Calcular dados para distribuição por mês de vencimento
+  const calcularDistribuicaoData = () => {
+    const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const distribuicao: { [key: string]: number } = {};
+    
+    // Inicializar todos os meses com 0
+    meses.forEach(mes => distribuicao[mes] = 0);
+
+    // Contar contratos por mês de vencimento
+    contratos.forEach(contrato => {
+      const dataFinal = new Date(contrato.dataFinal);
+      const mes = meses[dataFinal.getMonth()];
+      distribuicao[mes]++;
+    });
+
+    return meses.map(mes => ({
+      mes,
+      contratos: distribuicao[mes]
+    }));
+  };
+
+  const timelineData = calcularTimelineData();
+  const distribuicaoData = calcularDistribuicaoData();
+
+  // Formatar data para exibição
+  const formatarData = (data: string) => {
+    const d = new Date(data);
+    return d.toLocaleDateString('pt-BR');
+  };
+
+  // Calcular secretarias com contratos vencidos sem providência
+  const calcularSecretariasAtrasadas = () => {
+    const secretariasMap: { [key: string]: number } = {};
+    
+    contratosVencidos.forEach(contrato => {
+      const secretaria = contrato.secretaria || 'Sem secretaria';
+      if (!secretariasMap[secretaria]) {
+        secretariasMap[secretaria] = 0;
+      }
+      secretariasMap[secretaria]++;
+    });
+
+    return Object.entries(secretariasMap)
+      .map(([nome, quantidade]) => ({
+        nome,
+        quantidade,
+        diasAtraso: Math.abs(calcularDiasRestantes(contratosVencidos.find(c => c.secretaria === nome)?.dataFinal || ''))
+      }))
+      .sort((a, b) => b.diasAtraso - a.diasAtraso)
+      .slice(0, 3);
+  };
+
+  // Calcular gestores com contratos em atraso
+  const calcularGestoresAtrasados = () => {
+    const gestoresMap: { [key: string]: { vencidos: number; emAlerta: number; secretaria: string } } = {};
+    
+    [...contratosVencidos, ...contratosEmAlerta].forEach(contrato => {
+      const gestor = contrato.gestor || 'Sem gestor';
+      const secretaria = contrato.secretaria || 'Sem secretaria';
+      
+      if (!gestoresMap[gestor]) {
+        gestoresMap[gestor] = { vencidos: 0, emAlerta: 0, secretaria };
+      }
+      
+      if (getStatusContrato(contrato.dataFinal) === 'vencido') {
+        gestoresMap[gestor].vencidos++;
+      } else {
+        gestoresMap[gestor].emAlerta++;
+      }
+    });
+
+    return Object.entries(gestoresMap)
+      .map(([nome, dados]) => ({
+        nome,
+        vencidos: dados.vencidos,
+        emAlerta: dados.emAlerta,
+        secretaria: dados.secretaria
+      }))
+      .sort((a, b) => (b.vencidos + b.emAlerta) - (a.vencidos + a.emAlerta))
+      .slice(0, 2);
+  };
+
+  const secretariasAtrasadas = calcularSecretariasAtrasadas();
+  const gestoresAtrasados = calcularGestoresAtrasados();
+  const contratosVencidosSemAcao = contratosVencidos.length;
+  const contratosAlertaSemAcao = contratosEmAlerta.length;
+  const secretariasComPendencias = new Set([...contratosVencidos, ...contratosEmAlerta].map(c => c.secretaria)).size;
 
   // Se não há contratos, mostrar estado vazio
   if (!temContratos) {
@@ -67,32 +326,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     );
   }
 
-  // Dados para o gráfico de linha do tempo
-  const timelineData = [
-    { mes: 'Mai', vigentes: 82, emAlerta: 8, vencidos: 4 },
-    { mes: 'Jun', vigentes: 85, emAlerta: 6, vencidos: 5 },
-    { mes: 'Jul', vigentes: 83, emAlerta: 10, vencidos: 6 },
-    { mes: 'Ago', vigentes: 86, emAlerta: 9, vencidos: 7 },
-    { mes: 'Set', vigentes: 84, emAlerta: 11, vencidos: 5 },
-    { mes: 'Out', vigentes: 86, emAlerta: 9, vencidos: 7 }
-  ];
-
-  // Dados para distribuição por mês
-  const distribuicaoData = [
-    { mes: 'Jan', contratos: 8 },
-    { mes: 'Fev', contratos: 12 },
-    { mes: 'Mar', contratos: 15 },
-    { mes: 'Abr', contratos: 10 },
-    { mes: 'Mai', contratos: 18 },
-    { mes: 'Jun', contratos: 14 },
-    { mes: 'Jul', contratos: 9 },
-    { mes: 'Ago', contratos: 11 },
-    { mes: 'Set', contratos: 16 },
-    { mes: 'Out', contratos: 13 },
-    { mes: 'Nov', contratos: 7 },
-    { mes: 'Dez', contratos: 5 }
-  ];
-
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
       {/* Header */}
@@ -105,19 +338,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             Visão geral dos contratos sob responsabilidade da CGM e gestores. Destaque para prazos críticos.
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => onNavigate('meus-contratos')}
-            className="px-4 py-2 border border-gray-300 rounded-md text-[#102a43] text-sm hover:bg-gray-50 font-medium"
-          >
-            Ver meus contratos
-          </button>
-        </div>
       </div>
 
       {/* Filtros */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="block text-[#102a43] text-xs mb-1.5">Período de vencimento</label>
             <select 
@@ -138,9 +363,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
             >
               <option value="todas">Todas</option>
-              <option value="educacao">Secretaria de Educação</option>
-              <option value="saude">Secretaria de Saúde</option>
-              <option value="obras">Secretaria de Obras</option>
+              {secretarias.map(secretaria => (
+                <option key={secretaria.id} value={secretaria.id}>{secretaria.nome}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -155,32 +380,25 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               <option value="joao">João Santos</option>
             </select>
           </div>
-          <div>
-            <label className="block text-[#102a43] text-xs mb-1.5">Situação</label>
-            <select 
-              value={filters.situacao}
-              onChange={(e) => setFilters({ ...filters, situacao: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
-            >
-              <option value="todas">Vigente, Próx. vencimento, Vencido</option>
-              <option value="vigente">Vigente</option>
-              <option value="proximo">Próx. vencimento</option>
-              <option value="vencido">Vencido</option>
-            </select>
-          </div>
         </div>
-        <div className="flex justify-end gap-2 mt-3">
-          <button className="px-4 py-1.5 border border-gray-300 rounded-md text-[#102a43] text-sm hover:bg-gray-50">
+        <div className="flex flex-col sm:flex-row justify-end gap-2 mt-3">
+          <button
+            onClick={handleLimparFiltros}
+            className="px-4 py-1.5 border border-gray-300 rounded-md text-[#102a43] text-sm hover:bg-gray-50"
+          >
             Limpar
           </button>
-          <button className="px-4 py-1.5 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31]">
+          <button
+            onClick={handleAplicarFiltros}
+            className="px-4 py-1.5 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31]"
+          >
             Aplicar filtros
           </button>
         </div>
       </div>
 
       {/* Cards de métricas */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Contratos vigentes */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
           <div className="flex items-start justify-between mb-2">
@@ -188,7 +406,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             <FileText className="size-5 text-green-600" />
           </div>
           <div className="mb-1">
-            <span className="text-[#102a43] text-3xl font-medium">86</span>
+            <span className="text-[#102a43] text-3xl font-medium">{contratosVigentes.length}</span>
             <span className="text-gray-500 text-sm ml-2">+4 este mês</span>
           </div>
           <p className="text-gray-500 text-xs">
@@ -203,7 +421,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             <Clock className="size-5 text-orange-500" />
           </div>
           <div className="mb-1">
-            <span className="text-[#102a43] text-3xl font-medium">19</span>
+            <span className="text-[#102a43] text-3xl font-medium">{contratosEmAlerta.length}</span>
             <span className="text-gray-500 text-sm ml-2">Faixa até 90 dias</span>
           </div>
           <p className="text-gray-500 text-xs">
@@ -218,7 +436,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             <AlertTriangle className="size-5 text-red-500" />
           </div>
           <div className="mb-1">
-            <span className="text-[#102a43] text-3xl font-medium">7</span>
+            <span className="text-[#102a43] text-3xl font-medium">{contratosVencidos.length}</span>
             <span className="text-gray-500 text-sm ml-2">3 sem ação registrada</span>
           </div>
           <p className="text-gray-500 text-xs">
@@ -233,7 +451,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             <Bell className="size-5 text-blue-500" />
           </div>
           <div className="mb-1">
-            <span className="text-[#102a43] text-3xl font-medium">12</span>
+            <span className="text-[#102a43] text-3xl font-medium">{alertasPendentes.length}</span>
             <span className="text-gray-500 text-sm ml-2">Alertas e prazos</span>
           </div>
           <p className="text-gray-500 text-xs">
@@ -243,7 +461,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       </div>
 
       {/* Gráficos */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Linha do tempo de vencimentos */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
           <h3 className="text-[#102a43] text-sm font-medium mb-4">
@@ -338,25 +556,19 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       </div>
 
       {/* Cards de alertas */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Secretarias fora do prazo */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <h3 className="text-[#102a43] text-sm font-medium mb-3">
             Secretarias fora do prazo sem providência
           </h3>
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-600">Educação</span>
-              <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded">Atrasada 8 dias</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-600">Administração</span>
-              <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded">Atrasada 5 dias</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-600">Obras</span>
-              <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded">Atrasada 3 dias</span>
-            </div>
+            {secretariasAtrasadas.map((secretaria, index) => (
+              <div key={index} className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">{secretaria.nome}</span>
+                <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded">Atrasada {secretaria.diasAtraso} dias</span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -368,14 +580,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="text-orange-600">Em faixa de alerta</span>
-              <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded">9 contratos</span>
+              <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded">{contratosAlertaSemAcao} contratos</span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-red-600">Vencidos sem providência</span>
-              <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded">5 contratos</span>
+              <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded">{contratosVencidosSemAcao} contratos</span>
             </div>
             <div className="text-xs text-gray-500 mt-2">
-              3 secretarias
+              {secretariasComPendencias} secretarias
             </div>
           </div>
         </div>
@@ -386,22 +598,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             Gestores com contratos em atraso
           </h3>
           <div className="space-y-2.5">
-            <div>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-gray-700">João Pereira</span>
+            {gestoresAtrasados.map((gestor, index) => (
+              <div key={index}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-gray-700">{gestor.nome}</span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  {gestor.secretaria} • {gestor.vencidos} vencidos, {gestor.emAlerta} em alerta
+                </div>
               </div>
-              <div className="text-xs text-gray-500">
-                Secretaria de Administração • 2 vencidos sem ação
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-gray-700">Ana Souza</span>
-              </div>
-              <div className="text-xs text-gray-500">
-                Secretaria de Obras • 1 vencido, 3 em alerta
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
@@ -431,7 +637,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       </div>
 
       {/* Tabelas de contratos */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Contratos próximos do vencimento */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="p-4 border-b border-gray-200">
@@ -439,7 +645,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               Contratos próximos do vencimento
             </h3>
             <p className="text-gray-500 text-xs mt-0.5">
-              Mostrando 1-4 de 19 contratos em faixa de alerta
+              Mostrando {Math.min(4, contratosProximosVencimento.length)} de {contratosEmAlerta.length} contratos em faixa de alerta
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -453,30 +659,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-t border-gray-200">
-                  <td className="px-4 py-3 text-xs text-gray-700">Secretaria de Educação</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">Alfa Sistemas Educacionais S.A.</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">Material didático e tecnológico</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">30/09/2025</td>
-                </tr>
-                <tr className="border-t border-gray-200">
-                  <td className="px-4 py-3 text-xs text-gray-700">Secretaria de Obras</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">Construtora Jardim Urbano ME</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">Manutenção de vias urbanas e sarais.</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">15/08/2025</td>
-                </tr>
-                <tr className="border-t border-gray-200">
-                  <td className="px-4 py-3 text-xs text-gray-700">Secretaria de Saúde</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">Clínica Vida Plena Ltda.</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">Serviços médicos especializados.</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">12/02/2026</td>
-                </tr>
-                <tr className="border-t border-gray-200">
-                  <td className="px-4 py-3 text-xs text-gray-700">Secretaria de Administração</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">Alpha Serviços Gerais Ltda.</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">Serviços de limpeza e conservação predial.</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">10/05/2025</td>
-                </tr>
+                {contratosProximosVencimento.map((contrato, index) => (
+                  <tr key={index} className="border-t border-gray-200">
+                    <td className="px-4 py-3 text-xs text-gray-700">{contrato.secretaria}</td>
+                    <td className="px-4 py-3 text-xs text-gray-700">{contrato.contratado}</td>
+                    <td className="px-4 py-3 text-xs text-gray-700">{contrato.objeto}</td>
+                    <td className="px-4 py-3 text-xs text-gray-700">{formatarData(contrato.dataFinal)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -511,36 +701,18 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-t border-gray-200">
-                  <td className="px-4 py-3 text-xs text-gray-700">Secretaria de Administração</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">Alpha Serviços Gerais Ltda.</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">10/05/2025</td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">
-                      Sem providência
-                    </span>
-                  </td>
-                </tr>
-                <tr className="border-t border-gray-200">
-                  <td className="px-4 py-3 text-xs text-gray-700">Secretaria de Obras</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">Construtora Jardim Urbano ME</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">02/04/2025</td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs">
-                      Em trâmite
-                    </span>
-                  </td>
-                </tr>
-                <tr className="border-t border-gray-200">
-                  <td className="px-4 py-3 text-xs text-gray-700">Secretaria de Saúde</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">Clínica Vida Plena Ltda.</td>
-                  <td className="px-4 py-3 text-xs text-gray-700">20/03/2025</td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">
-                      Aguardando resposta
-                    </span>
-                  </td>
-                </tr>
+                {contratosVencidosLista.map((contrato, index) => (
+                  <tr key={index} className="border-t border-gray-200">
+                    <td className="px-4 py-3 text-xs text-gray-700">{contrato.secretaria}</td>
+                    <td className="px-4 py-3 text-xs text-gray-700">{contrato.contratado}</td>
+                    <td className="px-4 py-3 text-xs text-gray-700">{formatarData(contrato.dataFinal)}</td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">
+                        Sem providência
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

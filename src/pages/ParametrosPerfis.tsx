@@ -198,7 +198,7 @@ export function ParametrosPerfis() {
                     className="size-4 text-[#0b6b3a] rounded"
                   />
                   <span className="text-gray-600 text-sm">
-                    E-mail institucional
+                    E-mail
                   </span>
                 </label>
                 <label className="flex items-center gap-2">

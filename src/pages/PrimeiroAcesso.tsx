@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserPlus, Mail, Lock, User, Building } from 'lucide-react';
 import { auth } from '../utils/api';
+import { projectId, publicAnonKey } from '../utils/supabase/info';
 
 export function PrimeiroAcesso() {
   const [formData, setFormData] = useState({
@@ -8,11 +9,37 @@ export function PrimeiroAcesso() {
     email: '',
     password: '',
     confirmPassword: '',
-    secretaria: 'CGM - Controladoria Geral'
+    secretaria: ''
   });
+  const [secretarias, setSecretarias] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  // Carregar secretarias da API
+  useEffect(() => {
+    const carregarSecretarias = async () => {
+      try {
+        const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-1a8b02da/secretarias`, {
+          headers: {
+            'Authorization': `Bearer ${publicAnonKey}`
+          }
+        });
+        const data = await response.json();
+        if (data.success && data.secretarias) {
+          setSecretarias(data.secretarias);
+          // Definir CGM como padrão se existir
+          const cgm = data.secretarias.find((s: any) => s.nome.includes('CGM'));
+          if (cgm && !formData.secretaria) {
+            setFormData(prev => ({ ...prev, secretaria: cgm.nome }));
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao carregar secretarias:', err);
+      }
+    };
+    carregarSecretarias();
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData(prev => ({
@@ -55,7 +82,7 @@ export function PrimeiroAcesso() {
           email: '',
           password: '',
           confirmPassword: '',
-          secretaria: 'CGM - Controladoria Geral'
+          secretaria: ''
         });
       }
     } catch (err: any) {
@@ -166,10 +193,10 @@ export function PrimeiroAcesso() {
                 required
                 className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0b6b3a] appearance-none"
               >
-                <option>CGM - Controladoria Geral</option>
-                <option>Secretaria de Saúde</option>
-                <option>Secretaria de Educação</option>
-                <option>Secretaria de Obras</option>
+                <option value="">Selecione uma secretaria</option>
+                {secretarias.map((s: any) => (
+                  <option key={s.id} value={s.nome}>{s.nome}</option>
+                ))}
               </select>
             </div>
           </div>

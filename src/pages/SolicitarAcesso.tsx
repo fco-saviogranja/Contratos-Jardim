@@ -49,6 +49,12 @@ export function SolicitarAcesso() {
 
     try {
       console.log('📤 Enviando solicitação de acesso...');
+      console.log('📋 Dados do formulário:', {
+        nome: formData.nome,
+        email: formData.email,
+        cargo: formData.cargo,
+        setor: formData.setor
+      });
       
       await solicitacoes.criar(formData);
       
@@ -65,8 +71,25 @@ export function SolicitarAcesso() {
         justificativa: ''
       });
     } catch (err: any) {
-      setError(err.message || 'Erro ao enviar solicitação. Tente novamente.');
-      console.error('Erro na solicitação:', err);
+      console.error('❌ Erro completo ao enviar solicitação:', err);
+      
+      let errorMessage = 'Erro ao enviar solicitação. Tente novamente.';
+      
+      if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      // Verificar se é erro de conexão
+      if (err.message && err.message.includes('Failed to fetch')) {
+        errorMessage = '❌ Não foi possível conectar ao servidor.\n\n' +
+          '🔧 Possíveis soluções:\n' +
+          '1. Verifique sua conexão com a internet\n' +
+          '2. Aguarde alguns segundos e tente novamente\n' +
+          '3. Entre em contato com o administrador do sistema';
+      }
+      
+      setError(errorMessage);
+      console.error('💬 Mensagem de erro exibida:', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -118,8 +141,8 @@ export function SolicitarAcesso() {
         <form onSubmit={handleSubmit} className="p-8 space-y-4">
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-900 text-sm font-medium">Erro</p>
-              <p className="text-red-700 text-sm mt-1">{error}</p>
+              <p className="text-red-900 text-sm font-medium mb-2">Erro</p>
+              <p className="text-red-700 text-sm whitespace-pre-line">{error}</p>
             </div>
           )}
 

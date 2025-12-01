@@ -3,9 +3,10 @@ import { Search, Edit, UserX, UserCheck, UserPlus, Loader, Clock, CheckCircle, X
 import { usuarios as usuariosAPI } from '../utils/api';
 import { toast } from 'sonner@2.0.3';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { MeuPerfil } from '../components/MeuPerfil';
 
 export function GerenciarUsuarios() {
-  const [activeTab, setActiveTab] = useState<'admin' | 'gestor' | 'fiscal' | 'secretarias' | 'solicitacoes'>('admin');
+  const [activeTab, setActiveTab] = useState<'admin' | 'gestor' | 'fiscal' | 'secretarias' | 'solicitacoes' | 'perfil'>('admin');
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAprovarModal, setShowAprovarModal] = useState(false);
@@ -46,6 +47,13 @@ export function GerenciarUsuarios() {
     sigla: '',
     responsavel: ''
   });
+  const [filtros, setFiltros] = useState({
+    busca: '',
+    perfil: 'todos',
+    situacao: 'todos',
+    secretaria: 'todas'
+  });
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     carregarUsuarios();
@@ -80,8 +88,11 @@ export function GerenciarUsuarios() {
       console.log('📥 Solicitações recebidas:', response);
       
       if (response.success && response.solicitacoes) {
-        setSolicitacoes(response.solicitacoes);
-        toast.success('Solicitações carregadas com sucesso!');
+        // Filtrar apenas solicitações pendentes (o backend já filtra, mas garantimos aqui também)
+        const pendentes = response.solicitacoes.filter((s: any) => s.status === 'pendente');
+        setSolicitacoes(pendentes);
+        console.log(`✅ ${pendentes.length} solicitações pendentes carregadas`);
+        toast.success(`${pendentes.length} solicitações pendentes carregadas`);
       }
     } catch (error: any) {
       console.error('❌ Erro ao carregar solicitações:', error);
@@ -99,6 +110,7 @@ export function GerenciarUsuarios() {
   };
 
   const tabs = [
+    { id: 'perfil' as const, label: 'Meu Perfil', count: null },
     { id: 'admin' as const, label: 'Administradores (CGM)', count: countByPerfil.admin },
     { id: 'gestor' as const, label: 'Gestores de Contratos', count: countByPerfil.gestor },
     { id: 'fiscal' as const, label: 'Fiscais de Contratos', count: countByPerfil.fiscal },
@@ -130,7 +142,55 @@ export function GerenciarUsuarios() {
     );
   };
 
-  const filteredUsers = usuarios.filter(user => user.perfil === activeTab);
+  // Aplicar filtros aos usuários
+  const aplicarFiltros = () => {
+    let usuariosFiltrados = usuarios.filter(user => user.perfil === activeTab);
+
+    // Filtro de busca (nome ou email)
+    if (filtros.busca.trim()) {
+      const buscaLower = filtros.busca.toLowerCase();
+      usuariosFiltrados = usuariosFiltrados.filter(user => 
+        user.nome.toLowerCase().includes(buscaLower) ||
+        user.email.toLowerCase().includes(buscaLower)
+      );
+    }
+
+    // Filtro de secretaria
+    if (filtros.secretaria !== 'todas') {
+      usuariosFiltrados = usuariosFiltrados.filter(user => 
+        user.secretaria === filtros.secretaria
+      );
+    }
+
+    // Filtro de situação
+    if (filtros.situacao !== 'todos') {
+      usuariosFiltrados = usuariosFiltrados.filter(user => 
+        user.situacao === filtros.situacao
+      );
+    }
+
+    // Filtro de perfil
+    if (filtros.perfil !== 'todos') {
+      usuariosFiltrados = usuariosFiltrados.filter(user => 
+        user.perfil === filtros.perfil
+      );
+    }
+
+    return usuariosFiltrados;
+  };
+
+  const filteredUsers = aplicarFiltros();
+
+  const limparFiltros = () => {
+    setFiltros({
+      busca: '',
+      perfil: 'todos',
+      situacao: 'todos',
+      secretaria: 'todas'
+    });
+  };
+
+  const temFiltrosAtivos = filtros.busca || filtros.perfil !== 'todos' || filtros.situacao !== 'todos' || filtros.secretaria !== 'todas';
 
   const handleEditClick = (usuario: any) => {
     setSelectedUser(usuario);
@@ -144,11 +204,66 @@ export function GerenciarUsuarios() {
     setShowEditModal(true);
   };
 
-  const handleToggleSituacao = (usuario: any) => {
+  const handleToggleSituacao = async (usuario: any) => {
     const novaSituacao = usuario.situacao === 'ativo' ? 'inativo' : 'ativo';
     const acao = novaSituacao === 'ativo' ? 'reativar' : 'desativar';
-    if (confirm(`Deseja realmente ${acao} o usuário ${usuario.nome}?`)) {
-      alert('Funcionalidade em desenvolvimento');
+    
+    if (!confirm(`Deseja realmente ${acao} o usuário ${usuario.nome}?`)) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      console.log(`🔄 ${acao === 'reativar' ? 'Reativando' : 'Desativando'} usuário no backend...`);
+      const response = await usuariosAPI.update(usuario.id, {
+        ...usuario,
+        situacao: novaSituacao,
+        atualizadoEm: new Date().toISOString()
+      });
+      console.log('💾 Resposta do backend:', response);
+      
+      if (response.success) {
+        toast.success(`Usuário ${novaSituacao === 'ativo' ? 'reativado' : 'desativado'} com sucesso!`);
+        carregarUsuarios();
+      } else {
+        toast.error(`Erro ao ${acao} usuário: ` + response.message);
+      }
+    } catch (error: any) {
+      console.error(`❌ Erro ao ${acao} usuário:`, error);
+      toast.error(`Erro ao ${acao} usuário: ` + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async (usuario: any) => {
+    // Não permitir excluir o administrador principal
+    if (usuario.email === 'controleinterno@jardim.ce.gov.br') {
+      toast.error('Não é permitido excluir o administrador principal do sistema!');
+      return;
+    }
+
+    if (!confirm(`⚠️ TEM CERTEZA que deseja EXCLUIR o usuário "${usuario.nome}"?\n\n📧 Email: ${usuario.email}\n\nEsta ação NÃO PODE ser desfeita!`)) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      console.log('🗑️ Excluindo usuário no backend...');
+      const response = await usuariosAPI.delete(usuario.id);
+      console.log('💾 Resposta do backend:', response);
+      
+      if (response.success) {
+        toast.success('Usuário excluído com sucesso!');
+        carregarUsuarios();
+      } else {
+        toast.error('Erro ao excluir usuário: ' + response.message);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao excluir usuário:', error);
+      toast.error('Erro ao excluir usuário: ' + error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -181,8 +296,24 @@ export function GerenciarUsuarios() {
   };
 
   const handleSaveCreate = async () => {
-    if (!createForm.nome || !createForm.email || !createForm.password || !createForm.secretaria) {
-      alert('Por favor, preencha todos os campos obrigatórios.');
+    // Validação detalhada
+    if (!createForm.nome) {
+      toast.error('Por favor, preencha o nome do usuário.');
+      return;
+    }
+    
+    if (!createForm.email) {
+      toast.error('Por favor, preencha o e-mail do usuário.');
+      return;
+    }
+    
+    if (!createForm.password) {
+      toast.error('Por favor, preencha a senha do usuário.');
+      return;
+    }
+    
+    if (!createForm.secretaria) {
+      toast.error('Por favor, selecione a secretaria do usuário.');
       return;
     }
 
@@ -426,13 +557,15 @@ export function GerenciarUsuarios() {
             }`}
           >
             {tab.label}
-            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${
-              activeTab === tab.id
-                ? 'bg-[#0b6b3a] text-white'
-                : 'bg-gray-200 text-gray-600'
-            }`}>
-              {tab.count}
-            </span>
+            {tab.count !== null && (
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${
+                activeTab === tab.id
+                  ? 'bg-[#0b6b3a] text-white'
+                  : 'bg-gray-200 text-gray-600'
+              }`}>
+                {tab.count}
+              </span>
+            )}
             {activeTab === tab.id && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0b6b3a]" />
             )}
@@ -453,6 +586,8 @@ export function GerenciarUsuarios() {
                 type="text"
                 placeholder="Digite o nome ou e-mail"
                 className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-md text-sm"
+                value={filtros.busca}
+                onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })}
               />
             </div>
           </div>
@@ -461,11 +596,14 @@ export function GerenciarUsuarios() {
             <label className="block text-gray-600 text-sm mb-1 font-medium">
               Secretaria / Órgão
             </label>
-            <select className="w-full px-3 py-2 bg-white border border-gray-200 rounded-md text-[#102a43] text-sm">
-              <option>Todas</option>
-              <option>CGM - Controladoria Geral</option>
-              <option>Secretaria de Saúde</option>
-              <option>Secretaria de Educação</option>
+            <select className="w-full px-3 py-2 bg-white border border-gray-200 rounded-md text-[#102a43] text-sm"
+              value={filtros.secretaria}
+              onChange={(e) => setFiltros({ ...filtros, secretaria: e.target.value })}
+            >
+              <option value="todas">Todas</option>
+              {secretarias.map((sec: any) => (
+                <option key={sec.id} value={sec.nome}>{sec.nome}</option>
+              ))}
             </select>
           </div>
           
@@ -473,10 +611,13 @@ export function GerenciarUsuarios() {
             <label className="block text-gray-600 text-sm mb-1 font-medium">
               Situação
             </label>
-            <select className="w-full px-3 py-2 bg-white border border-gray-200 rounded-md text-[#102a43] text-sm">
-              <option>Todas</option>
-              <option>Ativo</option>
-              <option>Inativo</option>
+            <select className="w-full px-3 py-2 bg-white border border-gray-200 rounded-md text-[#102a43] text-sm"
+              value={filtros.situacao}
+              onChange={(e) => setFiltros({ ...filtros, situacao: e.target.value })}
+            >
+              <option value="todos">Todas</option>
+              <option value="ativo">Ativo</option>
+              <option value="inativo">Inativo</option>
             </select>
           </div>
           
@@ -484,17 +625,33 @@ export function GerenciarUsuarios() {
             <label className="block text-gray-600 text-sm mb-1 font-medium">
               Perfil
             </label>
-            <select className="w-full px-3 py-2 bg-white border border-gray-200 rounded-md text-[#102a43] text-sm">
-              <option>Todos</option>
-              <option>Administrador</option>
-              <option>Gestor</option>
-              <option>Fiscal</option>
+            <select className="w-full px-3 py-2 bg-white border border-gray-200 rounded-md text-[#102a43] text-sm"
+              value={filtros.perfil}
+              onChange={(e) => setFiltros({ ...filtros, perfil: e.target.value })}
+            >
+              <option value="todos">Todos</option>
+              <option value="admin">Administrador</option>
+              <option value="gestor">Gestor</option>
+              <option value="fiscal">Fiscal</option>
             </select>
           </div>
           
-          <button className="px-4 py-2 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium">
-            Filtrar
-          </button>
+          <div className="flex gap-2">
+            <button className="px-4 py-2 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium"
+              onClick={aplicarFiltros}
+            >
+              Filtrar
+            </button>
+            
+            {temFiltrosAtivos && (
+              <button className="px-4 py-2 bg-gray-200 text-gray-600 rounded-md text-sm hover:bg-gray-300 font-medium"
+                onClick={limparFiltros}
+                title="Limpar filtros"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -505,6 +662,9 @@ export function GerenciarUsuarios() {
             <Loader className="size-8 animate-spin text-[#0b6b3a]" />
             <span className="ml-3 text-gray-600">Carregando usuários...</span>
           </div>
+        ) : activeTab === 'perfil' ? (
+          // Componente de perfil do usuário
+          <MeuPerfil />
         ) : activeTab === 'solicitacoes' ? (
           // Tabela de solicitações
           solicitacoes.length === 0 ? (
@@ -795,6 +955,14 @@ export function GerenciarUsuarios() {
                               <UserCheck className="size-4 text-green-600" />
                             </button>
                           )}
+                          <button 
+                            className="p-1.5 hover:bg-red-100 rounded transition-colors"
+                            title="Excluir permanentemente"
+                            onClick={() => handleDeleteUser(usuario)}
+                            disabled={usuario.email === 'controleinterno@jardim.ce.gov.br'}
+                          >
+                            <Trash2 className={`size-4 ${usuario.email === 'controleinterno@jardim.ce.gov.br' ? 'text-gray-300' : 'text-red-600'}`} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -853,9 +1021,9 @@ export function GerenciarUsuarios() {
                   onChange={(e) => setEditForm({ ...editForm, secretaria: e.target.value })}
                   className="w-full px-3 py-2 bg-white border border-gray-200 rounded-md text-[#102a43] text-sm"
                 >
-                  <option>CGM - Controladoria Geral</option>
-                  <option>Secretaria de Saúde</option>
-                  <option>Secretaria de Educação</option>
+                  {secretarias.map((sec: any) => (
+                    <option key={sec.id} value={sec.nome}>{sec.nome}</option>
+                  ))}
                 </select>
               </div>
               
@@ -947,9 +1115,10 @@ export function GerenciarUsuarios() {
                   onChange={(e) => setCreateForm({ ...createForm, secretaria: e.target.value })}
                   className="w-full px-3 py-2 bg-white border border-gray-200 rounded-md text-[#102a43] text-sm"
                 >
-                  <option>CGM - Controladoria Geral</option>
-                  <option>Secretaria de Saúde</option>
-                  <option>Secretaria de Educação</option>
+                  <option value="">Selecione uma secretaria</option>
+                  {secretarias.map((sec: any) => (
+                    <option key={sec.id} value={sec.nome}>{sec.nome}</option>
+                  ))}
                 </select>
               </div>
               

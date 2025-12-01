@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Upload, FileSpreadsheet, AlertCircle, CheckCircle, Download } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, AlertCircle, CheckCircle, Download, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { contratos as contratosAPI } from '../utils/api';
+import { projectId, publicAnonKey } from '../utils/supabase/info';
 
 interface ImportarExcelModalProps {
   isOpen: boolean;
@@ -10,7 +12,134 @@ interface ImportarExcelModalProps {
 interface SecretariaNaoEncontrada {
   nomeArquivo: string;
   linhas: number[];
-  sugestoes: string[];
+  sugestoes: Array<{ nome: string; similaridade: number }>;
+}
+
+interface ContratoDuplicado {
+  numero: string;
+  linhas: number[];
+  contratoExistente: any;
+}
+
+// Função para calcular similaridade entre strings (Levenshtein Distance)
+function calcularSimilaridade(str1: string, str2: string): number {
+  const s1 = str1.toLowerCase();
+  const s2 = str2.toLowerCase();
+  
+  const costs: number[] = [];
+  for (let i = 0; i <= s1.length; i++) {
+    let lastValue = i;
+    for (let j = 0; j <= s2.length; j++) {
+      if (i === 0) {
+        costs[j] = j;
+      } else if (j > 0) {
+        let newValue = costs[j - 1];
+        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
+          newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+        }
+        costs[j - 1] = lastValue;
+        lastValue = newValue;
+      }
+    }
+    if (i > 0) {
+      costs[s2.length] = lastValue;
+    }
+  }
+  
+  // Retorna similaridade normalizada (0 a 1, onde 1 é idêntico)
+  const maxLength = Math.max(s1.length, s2.length);
+  return 1 - (costs[s2.length] / maxLength);
+}
+
+// Função para calcular pontuação semântica baseada em palavras-chave
+function calcularPontuacaoSemantica(str1: string, str2: string): number {
+  const palavras1 = str1.toLowerCase().split(/\s+/).filter(p => p.length > 2);
+  const palavras2 = str2.toLowerCase().split(/\s+/).filter(p => p.length > 2);
+  
+  // Remover palavras muito comuns (stop words)
+  const stopWords = ['de', 'da', 'do', 'das', 'dos', 'e', 'ou', 'para'];
+  const palavrasFiltradas1 = palavras1.filter(p => !stopWords.includes(p));
+  const palavrasFiltradas2 = palavras2.filter(p => !stopWords.includes(p));
+  
+  if (palavrasFiltradas1.length === 0 || palavrasFiltradas2.length === 0) {
+    return 0;
+  }
+  
+  // Contar palavras em comum
+  let palavrasEmComum = 0;
+  for (const palavra1 of palavrasFiltradas1) {
+    for (const palavra2 of palavrasFiltradas2) {
+      // Match exato
+      if (palavra1 === palavra2) {
+        palavrasEmComum += 1;
+      }
+      // Match parcial (uma palavra contém a outra)
+      else if (palavra1.includes(palavra2) || palavra2.includes(palavra1)) {
+        palavrasEmComum += 0.7;
+      }
+      // Match fuzzy (similaridade > 70%)
+      else if (calcularSimilaridade(palavra1, palavra2) > 0.7) {
+        palavrasEmComum += 0.5;
+      }
+    }
+  }
+  
+  // Normalizar pela média do número de palavras
+  const mediaPalavras = (palavrasFiltradas1.length + palavrasFiltradas2.length) / 2;
+  return Math.min(1, palavrasEmComum / mediaPalavras);
+}
+
+// Função híbrida para encontrar as secretarias mais parecidas (considerando nome e sigla)
+function encontrarSecretariasMaisParecidas(
+  secretaria: string, 
+  secretariasCadastradas: string[], 
+  secretariasCadastradasCompletas: Array<{ nome: string; sigla: string }>,
+  limite: number = 3
+): Array<{ nome: string; similaridade: number }> {
+  // Calcular pontuação híbrida para cada secretaria cadastrada
+  const similaridades = secretariasCadastradas.map((nomeCompleto, index) => {
+    const secretariaCompleta = secretariasCadastradasCompletas[index];
+    
+    // Similaridade com o nome completo
+    const simTextoNome = calcularSimilaridade(secretaria, nomeCompleto);
+    const simSemanticaNome = calcularPontuacaoSemantica(secretaria, nomeCompleto);
+    const pontuacaoNome = (simTextoNome * 0.6) + (simSemanticaNome * 0.4);
+    
+    // Similaridade com a sigla (se existir)
+    let pontuacaoSigla = 0;
+    if (secretariaCompleta.sigla) {
+      const simTextoSigla = calcularSimilaridade(secretaria, secretariaCompleta.sigla);
+      const simSemanticaSigla = calcularPontuacaoSemantica(secretaria, secretariaCompleta.sigla);
+      pontuacaoSigla = (simTextoSigla * 0.6) + (simSemanticaSigla * 0.4);
+    }
+    
+    // Pontuação final: usa a maior entre nome e sigla
+    const pontuacaoFinal = Math.max(pontuacaoNome, pontuacaoSigla);
+    
+    return {
+      nome: nomeCompleto,
+      similaridade: pontuacaoFinal,
+      simNome: pontuacaoNome,
+      simSigla: pontuacaoSigla
+    };
+  });
+  
+  // Ordenar por pontuação final (maior primeiro)
+  similaridades.sort((a, b) => b.similaridade - a.similaridade);
+  
+  // Filtrar apenas sugestões com similaridade >= 30% (threshold mínimo)
+  const sugestoesRelevantes = similaridades.filter(s => s.similaridade >= 0.30);
+  
+  // Se não houver sugestões relevantes, retornar array vazio
+  if (sugestoesRelevantes.length === 0) {
+    return [];
+  }
+  
+  // Retornar as top N mais parecidas
+  return sugestoesRelevantes.slice(0, limite).map(s => ({
+    nome: s.nome,
+    similaridade: s.similaridade
+  }));
 }
 
 export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps) {
@@ -21,11 +150,16 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
     total: 0,
     validos: 0,
     invalidos: 0,
+    duplicados: 0,
     erros: [] as string[]
   });
   const [secretariasNaoEncontradas, setSecretariasNaoEncontradas] = useState<SecretariaNaoEncontrada[]>([]);
+  const [contratosDuplicados, setContratosDuplicados] = useState<ContratoDuplicado[]>([]);
   const [mapeamentos, setMapeamentos] = useState<{[key: string]: string}>({});
   const [dadosLidos, setDadosLidos] = useState<any[][]>([]);
+  const [linhasParaImportar, setLinhasParaImportar] = useState<any[][]>([]); // TODAS as linhas válidas
+  const [ignorarDuplicatas, setIgnorarDuplicatas] = useState(true);
+  const [secretariasCadastradasCompletas, setSecretariasCadastradasCompletas] = useState<Array<{ nome: string; sigla: string }>>([]);
 
   // Iniciar validação automaticamente quando arquivo for carregado
   useEffect(() => {
@@ -83,6 +217,82 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
     setEtapa('preview');
     
     try {
+      console.log('🔄 Buscando contratos existentes para verificar duplicatas...');
+      
+      // Buscar contratos existentes da API
+      let contratosExistentes: any[] = [];
+      try {
+        const response = await contratosAPI.getAll();
+        contratosExistentes = response.success ? response.contratos : [];
+        console.log(`✅ ${contratosExistentes.length} contratos existentes carregados`);
+      } catch (err) {
+        console.warn('⚠️ Não foi possível buscar contratos existentes:', err);
+      }
+      
+      // Buscar secretarias cadastradas da API
+      let secretariasCadastradas: string[] = [];
+      let secretariasCompletasLocal: Array<{ nome: string; sigla: string }> = [];
+      try {
+        // Obter token de autenticação do localStorage
+        const accessToken = localStorage.getItem('access_token');
+        const authHeader = accessToken ? `Bearer ${accessToken}` : `Bearer ${publicAnonKey}`;
+        
+        console.log('🔄 Buscando secretarias cadastradas...');
+        const responseSecretarias = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-1a8b02da/secretarias`, {
+          headers: {
+            'Authorization': authHeader
+          }
+        });
+        const dataSecretarias = await responseSecretarias.json();
+        
+        console.log('📊 Resposta da API de secretarias:', dataSecretarias);
+        
+        if (dataSecretarias.success && dataSecretarias.secretarias) {
+          // Armazenar lista completa com nome e sigla
+          secretariasCompletasLocal = dataSecretarias.secretarias.map((s: any) => ({
+            nome: s.nome,
+            sigla: s.sigla || ''
+          }));
+          setSecretariasCadastradasCompletas(secretariasCompletasLocal);
+          
+          // Lista de nomes para compatibilidade
+          secretariasCadastradas = dataSecretarias.secretarias.map((s: any) => s.nome);
+          
+          console.log(`✅ ${secretariasCadastradas.length} secretarias cadastradas carregadas:`, secretariasCompletasLocal);
+        } else {
+          console.warn('⚠️ API não retornou secretarias válidas:', dataSecretarias);
+          // Fallback para lista padrão
+          secretariasCompletasLocal = [
+            { nome: 'CGM - Controladoria Geral', sigla: 'CGM' },
+            { nome: 'Secretaria de Educação', sigla: 'SEMED' },
+            { nome: 'Secretaria de Saúde', sigla: 'SEMSAU' },
+            { nome: 'Secretaria de Obras', sigla: 'SEMOSP' },
+            { nome: 'Secretaria de Infraestrutura', sigla: 'SEMI' },
+            { nome: 'Secretaria de Meio Ambiente', sigla: 'SEMAMA' },
+            { nome: 'Secretaria de Desenvolvimento Sustentável', sigla: 'SEMDES' },
+            { nome: 'Secretaria de Desenvolvimento Urbano', sigla: 'SEMDU' }
+          ];
+          setSecretariasCadastradasCompletas(secretariasCompletasLocal);
+          secretariasCadastradas = secretariasCompletasLocal.map(s => s.nome);
+          console.log('⚠️ Usando lista padrão de secretarias');
+        }
+      } catch (err) {
+        console.warn('⚠️ Erro ao buscar secretarias:', err);
+        // Fallback para lista padrão
+        secretariasCompletasLocal = [
+          { nome: 'CGM - Controladoria Geral', sigla: 'CGM' },
+          { nome: 'Secretaria de Educação', sigla: 'SEMED' },
+          { nome: 'Secretaria de Saúde', sigla: 'SEMSAU' },
+          { nome: 'Secretaria de Obras', sigla: 'SEMOSP' },
+          { nome: 'Secretaria de Infraestrutura', sigla: 'SEMI' },
+          { nome: 'Secretaria de Meio Ambiente', sigla: 'SEMAMA' },
+          { nome: 'Secretaria de Desenvolvimento Sustentável', sigla: 'SEMDES' },
+          { nome: 'Secretaria de Desenvolvimento Urbano', sigla: 'SEMDU' }
+        ];
+        setSecretariasCadastradasCompletas(secretariasCompletasLocal);
+        secretariasCadastradas = secretariasCompletasLocal.map(s => s.nome);
+      }
+      
       // Ler o arquivo Excel
       const data = await arquivo.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
@@ -99,23 +309,14 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
       
       // Salvar dados lidos para exibição
       const dadosParaExibir: any[][] = [];
+      const todasLinhasValidas: any[][] = []; // Array temporário para todas as linhas válidas
       
       const erros: string[] = [];
       const secretariasProblema: SecretariaNaoEncontrada[] = [];
+      const contratosProblema: ContratoDuplicado[] = [];
       let validos = 0;
       let invalidos = 0;
       let processados = 0;
-      
-      // Lista de secretarias cadastradas (simular - depois vem do backend)
-      const secretariasCadastradas = [
-        'Secretaria de Educação',
-        'Secretaria de Saúde',
-        'Secretaria de Obras',
-        'Secretaria de Infraestrutura',
-        'Secretaria de Meio Ambiente',
-        'Secretaria de Desenvolvimento Sustentável',
-        'Secretaria de Desenvolvimento Urbano'
-      ];
       
       // Processar TODAS as linhas, começando da linha 2 (índice 1, pois linha 1 é cabeçalho)
       for (let i = 1; i < jsonData.length; i++) {
@@ -185,35 +386,63 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
           }
         }
         
-        // Verificar se secretaria existe
-        if (secretaria && !secretariasCadastradas.includes(secretaria)) {
-          // Gerar sugestões (simples match por palavras-chave)
-          const sugestoes = secretariasCadastradas.filter(s => {
-            const palavrasSecretaria = secretaria.toLowerCase().split(' ');
-            const palavrasSugestao = s.toLowerCase();
-            return palavrasSecretaria.some(p => p.length > 3 && palavrasSugestao.includes(p));
-          });
+        // Verificar se secretaria existe (por nome exato, sigla exata, ou similar)
+        if (secretaria) {
+          // Verificar match exato de nome
+          const matchNomeExato = secretariasCadastradas.includes(secretaria);
           
-          // Se não encontrou sugestões por palavras, mostrar todas
-          const sugestoesFinais = sugestoes.length > 0 ? sugestoes : secretariasCadastradas.slice(0, 3);
+          // Verificar match exato de sigla
+          const matchSiglaExata = secretariasCompletasLocal.find(s => 
+            s.sigla && s.sigla.toLowerCase() === secretaria.toLowerCase()
+          );
           
-          const secretariaExistente = secretariasProblema.find(s => s.nomeArquivo === secretaria);
-          if (secretariaExistente) {
-            secretariaExistente.linhas.push(numeroLinha);
-          } else {
-            secretariasProblema.push({
-              nomeArquivo: secretaria,
-              linhas: [numeroLinha],
-              sugestoes: sugestoesFinais
-            });
+          // Se encontrou match exato (nome ou sigla), está OK
+          if (!matchNomeExato && !matchSiglaExata) {
+            // Não encontrou match exato - gerar sugestões inteligentes
+            const sugestoes = encontrarSecretariasMaisParecidas(secretaria, secretariasCadastradas, secretariasCompletasLocal);
+            
+            const secretariaExistente = secretariasProblema.find(s => s.nomeArquivo === secretaria);
+            if (secretariaExistente) {
+              secretariaExistente.linhas.push(numeroLinha);
+            } else {
+              secretariasProblema.push({
+                nomeArquivo: secretaria,
+                linhas: [numeroLinha],
+                sugestoes
+              });
+            }
+            temErro = true;
+          } else if (matchSiglaExata) {
+            // Se encontrou pela sigla, registrar no console para debug
+            console.log(`  ✅ Secretaria encontrada pela sigla: "${secretaria}" → "${matchSiglaExata.nome}"`);
           }
-          temErro = true;
+        }
+        
+        // Verificar se contrato já existe
+        if (contratado) {
+          const contratoExistente = contratosExistentes.find(c => c.contratado === contratado);
+          if (contratoExistente) {
+            const contratoProblemaExistente = contratosProblema.find(c => c.numero === contratado);
+            if (contratoProblemaExistente) {
+              contratoProblemaExistente.linhas.push(numeroLinha);
+            } else {
+              contratosProblema.push({
+                numero: contratado,
+                linhas: [numeroLinha],
+                contratoExistente
+              });
+            }
+            temErro = true;
+          }
         }
         
         if (temErro) {
           invalidos++;
         } else {
           validos++;
+          // Adicionar linha válida para importação
+          linhasParaImportar.push([secretaria, contratado, objeto, dataFinal]);
+          todasLinhasValidas.push([secretaria, contratado, objeto, dataFinal]);
         }
       }
       
@@ -221,14 +450,18 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
       console.log('  ├─ Total processados:', processados);
       console.log('  ├─ Válidos:', validos);
       console.log('  ├─ Inválidos:', invalidos);
+      console.log('  ├─ Duplicados:', contratosProblema.length);
       console.log('  └─ Erros:', erros.length);
       
       setDadosLidos(dadosParaExibir);
+      setLinhasParaImportar(todasLinhasValidas); // Salvar TODAS as linhas válidas
       setSecretariasNaoEncontradas(secretariasProblema);
+      setContratosDuplicados(contratosProblema);
       setValidacao({
         total: processados,
         validos,
         invalidos,
+        duplicados: contratosProblema.length,
         erros
       });
       
@@ -246,11 +479,111 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
     }
   };
 
-  const importarContratos = () => {
-    // Simulação de importação
-    setTimeout(() => {
+  const importarContratos = async () => {
+    try {
+      console.log('🚀 Iniciando importação de contratos...');
+      setEtapa('preview'); // Mostra loading
+      
+      let contratosImportados = 0;
+      let errosImportacao: string[] = [];
+      
+      // Processar cada linha válida do Excel
+      for (let i = 1; i < linhasParaImportar.length + 1; i++) {
+        const linha = linhasParaImportar[i - 1];
+        if (!linha) continue;
+        
+        try {
+          // Extrair dados
+          let secretaria = linha[0] ? String(linha[0]).trim() : '';
+          const contratado = linha[1] ? String(linha[1]).trim() : '';
+          const objeto = linha[2] ? String(linha[2]).trim() : '';
+          const dataFinal = linha[3] ? String(linha[3]).trim() : '';
+          
+          // Se a secretaria estava no mapeamento, usar o valor mapeado
+          if (mapeamentos[secretaria]) {
+            if (mapeamentos[secretaria] === '__NOVA__') {
+              // TODO: Implementar cadastro de nova secretaria
+              console.warn(`⚠️ Cadastro de nova secretaria não implementado: ${secretaria}`);
+              errosImportacao.push(`Linha ${i + 1}: Cadastro de nova secretaria não implementado`);
+              continue;
+            } else {
+              secretaria = mapeamentos[secretaria];
+            }
+          }
+          
+          // Verificar se encontrou a secretaria pela sigla
+          const secretariaEncontrada = secretariasCadastradasCompletas.find(s => 
+            s.sigla && s.sigla.toLowerCase() === linha[0]?.toString().trim().toLowerCase()
+          );
+          
+          if (secretariaEncontrada) {
+            secretaria = secretariaEncontrada.nome;
+          }
+          
+          // Validar campos obrigatórios
+          if (!secretaria || !contratado || !objeto || !dataFinal) {
+            console.warn(`⚠️ Linha ${i + 1}: Campos obrigatórios faltando`);
+            continue;
+          }
+          
+          // Criar contrato
+          const contratoData = {
+            numero: `IMP-${Date.now()}-${i}`, // Número temporário - ajuste conforme necessário
+            objeto: objeto,
+            contratado: contratado,
+            secretaria: secretaria,
+            dataInicio: new Date().toISOString().split('T')[0], // Data atual - ajuste conforme necessário
+            dataFim: dataFinal.split('/').reverse().join('-'), // Converter DD/MM/AAAA para AAAA-MM-DD
+            valor: 0, // Valor padrão - ajuste conforme necessário
+            status: 'ativo',
+            gestor: '', // Opcional
+            fiscal: '' // Opcional
+          };
+          
+          console.log(`📝 Importando contrato ${i}:`, contratoData);
+          
+          // Salvar no backend
+          const response = await contratosAPI.create(contratoData);
+          
+          if (response.success) {
+            contratosImportados++;
+            console.log(`✅ Contrato ${i} importado com sucesso`);
+          } else {
+            errosImportacao.push(`Linha ${i + 1}: ${response.error || 'Erro desconhecido'}`);
+            console.error(`❌ Erro ao importar contrato ${i}:`, response.error);
+          }
+          
+        } catch (error) {
+          errosImportacao.push(`Linha ${i + 1}: ${error.message}`);
+          console.error(`❌ Erro ao processar linha ${i}:`, error);
+        }
+      }
+      
+      console.log(`✅ Importação concluída: ${contratosImportados} contratos importados`);
+      
+      if (errosImportacao.length > 0) {
+        console.warn('⚠️ Erros durante importação:', errosImportacao);
+      }
+      
+      // Atualizar validação com resultado
+      setValidacao(prev => ({
+        ...prev,
+        validos: contratosImportados,
+        erros: errosImportacao
+      }));
+      
       setEtapa('sucesso');
-    }, 2000);
+      
+      // Recarregar página após 2 segundos para mostrar novos contratos
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+      
+    } catch (error) {
+      console.error('❌ Erro fatal durante importação:', error);
+      alert('Erro ao importar contratos. Verifique o console para mais detalhes.');
+      setEtapa('validacao');
+    }
   };
 
   return (
@@ -498,45 +831,62 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
                       Esta secretaria se enquadra em alguma já cadastrada?
                     </p>
                     
-                    <div className="space-y-2">
-                      {secretaria.sugestoes.map((sugestao, sIdx) => (
-                        <label 
-                          key={sIdx}
-                          className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                        >
-                          <input
-                            type="radio"
-                            name={`secretaria-${idx}`}
-                            value={sugestao}
-                            checked={mapeamentos[`${secretaria.nomeArquivo}`] === sugestao}
-                            onChange={(e) => setMapeamentos({
-                              ...mapeamentos,
-                              [`${secretaria.nomeArquivo}`]: e.target.value
-                            })}
-                            className="size-4"
-                          />
-                          <span className="text-[#102a43] text-sm flex-1">
-                            {sugestao}
-                          </span>
-                        </label>
-                      ))}
-                      
-                      <label className="flex items-center gap-3 p-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#0b6b3a] hover:bg-green-50 transition-colors">
-                        <input
-                          type="radio"
-                          name={`secretaria-${idx}`}
-                          value="__NOVA__"
-                          checked={mapeamentos[`${secretaria.nomeArquivo}`] === '__NOVA__'}
-                          onChange={(e) => setMapeamentos({
-                            ...mapeamentos,
-                            [`${secretaria.nomeArquivo}`]: e.target.value
+                    {/* Mostrar sugestões como dica visual (se houver) */}
+                    {secretaria.sugestoes.length > 0 && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <p className="text-blue-900 text-xs font-medium mb-2">
+                          💡 Sugestões baseadas em similaridade:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {secretaria.sugestoes.slice(0, 3).map((sugestao, sIdx) => {
+                            const confianca = Math.round(sugestao.similaridade * 100);
+                            let badgeColor = 'bg-blue-100 text-blue-700';
+                            
+                            if (confianca >= 70) {
+                              badgeColor = 'bg-green-100 text-green-700';
+                            } else if (confianca >= 50) {
+                              badgeColor = 'bg-amber-100 text-amber-700';
+                            }
+                            
+                            return (
+                              <span key={sIdx} className={`px-2 py-1 rounded text-xs font-medium ${badgeColor}`}>
+                                {sugestao.nome.split(' - ')[0]} ({confianca}%)
+                              </span>
+                            );
                           })}
-                          className="size-4"
-                        />
-                        <span className="text-[#0b6b3a] text-sm font-medium flex-1">
-                          Cadastrar nova secretaria: "{secretaria.nomeArquivo}"
-                        </span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Dropdown com todas as secretarias */}
+                    <div>
+                      <label className="block text-gray-700 text-sm font-medium mb-2">
+                        Selecione a secretaria correspondente:
                       </label>
+                      <select
+                        value={mapeamentos[`${secretaria.nomeArquivo}`] || ''}
+                        onChange={(e) => setMapeamentos({
+                          ...mapeamentos,
+                          [`${secretaria.nomeArquivo}`]: e.target.value
+                        })}
+                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-[#102a43] text-sm focus:outline-none focus:ring-2 focus:ring-[#0b6b3a] focus:border-transparent"
+                      >
+                        <option value="">Escolha uma secretaria...</option>
+                        
+                        {/* Opção de cadastrar nova - em destaque */}
+                        <option value="__NOVA__" className="font-medium">
+                          ✨ Cadastrar nova secretaria: "{secretaria.nomeArquivo}"
+                        </option>
+                        
+                        <option disabled>────────────────────────</option>
+                        
+                        {/* Lista de todas as secretarias cadastradas */}
+                        {secretariasCadastradasCompletas.map((sec, secIdx) => (
+                          <option key={secIdx} value={sec.nome}>
+                            {sec.sigla ? `${sec.sigla} - ${sec.nome}` : sec.nome}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>

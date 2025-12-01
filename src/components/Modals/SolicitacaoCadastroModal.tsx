@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, UserPlus, Mail, User, Briefcase, CheckCircle } from 'lucide-react';
-import { projectId, publicAnonKey } from '../../utils/supabase/info';
+import { solicitacoes } from '../../utils/api';
 
 interface SolicitacaoCadastroModalProps {
   isOpen: boolean;
@@ -13,6 +13,7 @@ export function SolicitacaoCadastroModal({ isOpen, onClose }: SolicitacaoCadastr
   const [cargo, setCargo] = useState('');
   const [setor, setSetor] = useState('');
   const [senha, setSenha] = useState('');
+  const [confirmarSenha, setConfirmarSenha] = useState('');
   const [justificativa, setJustificativa] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -23,57 +24,41 @@ export function SolicitacaoCadastroModal({ isOpen, onClose }: SolicitacaoCadastr
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    // Validação de senhas
+    if (senha !== confirmarSenha) {
+      setError('As senhas não coincidem. Por favor, verifique.');
+      return;
+    }
+    
+    if (senha.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+    
     setIsLoading(true);
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server/solicitacoes`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({
-            nome,
-            email,
-            cargo,
-            setor,
-            senha,
-            justificativa,
-          }),
-        }
-      );
-
-      // Verificar se a resposta é JSON antes de fazer parse
-      const contentType = response.headers.get('content-type');
-      const isJson = contentType && contentType.includes('application/json');
-
-      if (!response.ok) {
-        // Tratamento especial para erro 404
-        if (response.status === 404) {
-          throw new Error(
-            '⚠️ A API não está disponível ainda.\n\n' +
-            'A Edge Function "make-server" precisa ser deployada manualmente.\n\n' +
-            'Siga as instruções no arquivo /INSTRUCOES_DEPLOY.md para fazer o deploy.'
-          );
-        }
-
-        // Tentar obter mensagem de erro do JSON
-        if (isJson) {
-          const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
-          throw new Error(errorData.error || `Erro HTTP: ${response.status}`);
-        } else {
-          throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
-        }
-      }
-
-      // Verificar se a resposta de sucesso é JSON
-      if (!isJson) {
-        throw new Error('Resposta inesperada do servidor (não é JSON)');
-      }
+      await solicitacoes.criar({
+        nome,
+        email,
+        cargo,
+        setor,
+        senha,
+        confirmarSenha,
+        justificativa,
+      });
 
       setShowSuccess(true);
+      
+      // Resetar form
+      setNome('');
+      setEmail('');
+      setCargo('');
+      setSetor('');
+      setSenha('');
+      setConfirmarSenha('');
+      setJustificativa('');
     } catch (err: any) {
       console.error('Erro ao solicitar cadastro:', err);
       setError(err.message || 'Erro ao enviar solicitação. Tente novamente.');
@@ -242,6 +227,20 @@ export function SolicitacaoCadastroModal({ isOpen, onClose }: SolicitacaoCadastr
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               placeholder="Digite sua senha"
+              required
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0b6b3a] focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-gray-700 text-sm font-medium mb-2">
+              Confirmar Senha *
+            </label>
+            <input
+              type="password"
+              value={confirmarSenha}
+              onChange={(e) => setConfirmarSenha(e.target.value)}
+              placeholder="Confirme sua senha"
               required
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0b6b3a] focus:border-transparent"
             />

@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { FileText, Download, Calendar, Building2, User, DollarSign, Clock, TrendingUp, AlertCircle, RefreshCw, FileBarChart, Filter, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportUtils';
-import { RelatorioPreview } from '../components/RelatorioPreview';
+import { FileText, Download, Calendar, TrendingUp, AlertTriangle, FileCheck, Users, Filter, ChevronRight } from 'lucide-react';
+import { contratos as contratosAPI } from '../utils/api';
+import { MOCK_CONTRATOS } from '../utils/mockData';
+import { useSecretarias } from '../hooks/useSecretarias';
 
 interface RelatorioConfig {
   id: string;
@@ -10,7 +12,7 @@ interface RelatorioConfig {
   icon: any;
   color: string;
   bgColor: string;
-  categoria: 'contratos' | 'financeiro' | 'gestao' | 'compliance';
+  categoria: string;
 }
 
 interface RelatorioGerado {
@@ -23,8 +25,12 @@ interface RelatorioGerado {
 }
 
 export function Relatorios() {
-  const [relatorioSelecionado, setRelatorioSelecionado] = useState<string | null>(null);
-  const [showFiltros, setShowFiltros] = useState(false);
+  const [categoriaAtiva, setCategoriaAtiva] = useState<string>('todos');
+  const [showFilters, setShowFilters] = useState(false);
+  const [contratos, setContratos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { secretarias } = useSecretarias();
   const [filtros, setFiltros] = useState({
     dataInicio: '',
     dataFim: '',
@@ -34,8 +40,34 @@ export function Relatorios() {
     fiscal: 'todos'
   });
   
-  // Dados de exemplo temporários - no futuro virá da API
-  const mockContratos: any[] = [];
+  // Carregar contratos da API
+  useEffect(() => {
+    const carregarContratos = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('🔄 Carregando contratos para relatórios...');
+        const response = await contratosAPI.getAll();
+        
+        if (response.success && response.contratos) {
+          console.log(`✅ ${response.contratos.length} contratos carregados para relatórios`);
+          setContratos(response.contratos);
+        } else {
+          console.warn('⚠️ Resposta da API sem contratos');
+          setContratos([]);
+        }
+      } catch (err) {
+        console.error('❌ Erro ao carregar contratos da API:', err);
+        console.log('🔄 Usando dados mock como fallback');
+        setError('Não foi possível conectar ao servidor. Usando dados de exemplo.');
+        setContratos(MOCK_CONTRATOS);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    carregarContratos();
+  }, []);
 
   const relatoriosPredefinidos: RelatorioConfig[] = [
     {
@@ -51,7 +83,7 @@ export function Relatorios() {
       id: 'proximos-vencimento',
       titulo: 'Próximos ao Vencimento',
       descricao: 'Contratos que vencem nos próximos 30, 60 ou 90 dias',
-      icon: AlertCircle,
+      icon: AlertTriangle,
       color: 'text-amber-600',
       bgColor: 'bg-amber-50',
       categoria: 'contratos'
@@ -60,7 +92,7 @@ export function Relatorios() {
       id: 'contratos-vencidos',
       titulo: 'Contratos Vencidos',
       descricao: 'Contratos com prazo de vigência expirado',
-      icon: Clock,
+      icon: Calendar,
       color: 'text-red-600',
       bgColor: 'bg-red-50',
       categoria: 'contratos'
@@ -78,25 +110,16 @@ export function Relatorios() {
       id: 'contratos-gestor',
       titulo: 'Contratos por Gestor',
       descricao: 'Distribuição de contratos por gestor responsável',
-      icon: User,
+      icon: Users,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
-      categoria: 'gestao'
-    },
-    {
-      id: 'contratos-fiscal',
-      titulo: 'Contratos por Fiscal',
-      descricao: 'Contratos designados para cada fiscal',
-      icon: User,
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-50',
       categoria: 'gestao'
     },
     {
       id: 'alertas-pendentes',
       titulo: 'Alertas e Providências',
       descricao: 'Resumo de alertas ativos e providências registradas',
-      icon: AlertCircle,
+      icon: AlertTriangle,
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
       categoria: 'compliance'
@@ -105,7 +128,7 @@ export function Relatorios() {
       id: 'renovacoes',
       titulo: 'Histórico de Renovações',
       descricao: 'Registro de todas as renovações contratuais',
-      icon: RefreshCw,
+      icon: FileCheck,
       color: 'text-teal-600',
       bgColor: 'bg-teal-50',
       categoria: 'contratos'
@@ -114,7 +137,7 @@ export function Relatorios() {
       id: 'aditivos',
       titulo: 'Aditivos Contratuais',
       descricao: 'Contratos com aditivos de prazo ou valor',
-      icon: FileBarChart,
+      icon: FileText,
       color: 'text-cyan-600',
       bgColor: 'bg-cyan-50',
       categoria: 'financeiro'
@@ -123,7 +146,7 @@ export function Relatorios() {
       id: 'sem-fiscal',
       titulo: 'Contratos sem Fiscal',
       descricao: 'Contratos que não possuem fiscal designado',
-      icon: AlertCircle,
+      icon: AlertTriangle,
       color: 'text-red-600',
       bgColor: 'bg-red-50',
       categoria: 'compliance'
@@ -141,7 +164,7 @@ export function Relatorios() {
       id: 'secretarias',
       titulo: 'Consolidado por Secretaria',
       descricao: 'Visão geral de contratos e valores por órgão',
-      icon: Building2,
+      icon: FileText,
       color: 'text-slate-600',
       bgColor: 'bg-slate-50',
       categoria: 'gestao'
@@ -176,22 +199,20 @@ export function Relatorios() {
   ];
 
   const categorias = [
-    { id: 'todas', label: 'Todos os relatórios', count: relatoriosPredefinidos.length },
+    { id: 'todos', label: 'Todos os relatórios', count: relatoriosPredefinidos.length },
     { id: 'contratos', label: 'Contratos', count: relatoriosPredefinidos.filter(r => r.categoria === 'contratos').length },
     { id: 'financeiro', label: 'Financeiro', count: relatoriosPredefinidos.filter(r => r.categoria === 'financeiro').length },
     { id: 'gestao', label: 'Gestão', count: relatoriosPredefinidos.filter(r => r.categoria === 'gestao').length },
     { id: 'compliance', label: 'Compliance', count: relatoriosPredefinidos.filter(r => r.categoria === 'compliance').length }
   ];
 
-  const [categoriaAtiva, setCategoriaAtiva] = useState('todas');
-
-  const relatoriosFiltrados = categoriaAtiva === 'todas' 
+  const relatoriosFiltrados = categoriaAtiva === 'todos' 
     ? relatoriosPredefinidos 
     : relatoriosPredefinidos.filter(r => r.categoria === categoriaAtiva);
 
   const gerarRelatorio = (relatorioId: string, formato: 'csv' | 'excel' | 'pdf') => {
     // Preparar dados baseado no tipo de relatório
-    const dados = mockContratos.map(contrato => ({
+    const dados = contratos.map(contrato => ({
       numero: contrato.numero,
       objeto: contrato.objeto,
       contratado: contrato.contratado,
@@ -221,6 +242,13 @@ export function Relatorios() {
     alert(`Relatório "${relatorio?.titulo}" gerado com sucesso em formato ${formato.toUpperCase()}!`);
   };
 
+  const baixarRelatorioHistorico = (item: RelatorioGerado) => {
+    // Simular o download do relatório do histórico
+    console.log('Baixando relatório:', item);
+    alert(`Baixando relatório "${item.tipo}" em formato ${item.formato}...`);
+    // No futuro: fazer download do arquivo salvo no servidor
+  };
+
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
       {/* Header */}
@@ -247,13 +275,6 @@ export function Relatorios() {
               }`}
             >
               {cat.label}
-              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-                categoriaAtiva === cat.id
-                  ? 'bg-white bg-opacity-20'
-                  : 'bg-gray-200'
-              }`}>
-                {cat.count}
-              </span>
             </button>
           ))}
         </div>
@@ -315,7 +336,7 @@ export function Relatorios() {
       {/* Filtros Avançados */}
       <div className="bg-white rounded-lg border border-gray-200">
         <button
-          onClick={() => setShowFiltros(!showFiltros)}
+          onClick={() => setShowFilters(!showFilters)}
           className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
         >
           <div className="flex items-center gap-3">
@@ -329,10 +350,10 @@ export function Relatorios() {
               </p>
             </div>
           </div>
-          <ChevronRight className={`size-5 text-gray-400 transition-transform ${showFiltros ? 'rotate-90' : ''}`} />
+          <ChevronRight className={`size-5 text-gray-400 transition-transform ${showFilters ? 'rotate-90' : ''}`} />
         </button>
 
-        {showFiltros && (
+        {showFilters && (
           <div className="px-5 pb-5 border-t border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <div>
@@ -369,10 +390,9 @@ export function Relatorios() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                 >
                   <option value="todas">Todas as secretarias</option>
-                  <option value="saude">Secretaria de Saúde</option>
-                  <option value="educacao">Secretaria de Educação</option>
-                  <option value="obras">Secretaria de Obras</option>
-                  <option value="transporte">Secretaria de Transporte</option>
+                  {secretarias.map(secretaria => (
+                    <option key={secretaria.id} value={secretaria.id}>{secretaria.nome}</option>
+                  ))}
                 </select>
               </div>
 
@@ -510,6 +530,7 @@ export function Relatorios() {
                     <button
                       className="p-1.5 hover:bg-gray-100 rounded transition-colors"
                       title="Baixar novamente"
+                      onClick={() => baixarRelatorioHistorico(item)}
                     >
                       <Download className="size-4 text-gray-600" />
                     </button>

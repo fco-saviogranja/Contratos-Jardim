@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { LogIn, Mail, Lock, AlertCircle, Settings } from 'lucide-react';
+import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { SolicitacaoCadastroModal } from '../components/Modals/SolicitacaoCadastroModal';
 import logoImage from 'figma:asset/600321a23fd1c8706abb2a9ad97f41dade268db0.png';
+import { Settings } from 'lucide-react';
 
 interface LoginProps {
-  onShowSetup?: () => void;
   onShowSolicitarAcesso?: () => void;
 }
 
-export function Login({ onShowSetup, onShowSolicitarAcesso }: LoginProps) {
+export function Login({ onShowSolicitarAcesso }: LoginProps) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,8 +30,20 @@ export function Login({ onShowSetup, onShowSolicitarAcesso }: LoginProps) {
         setError('Credenciais inválidas. Verifique seu e-mail e senha.');
       }
     } catch (err: any) {
-      setError(err.message || 'Erro ao fazer login. Tente novamente.');
       console.error('Erro no login:', err);
+      
+      // Limpar mensagens técnicas e mostrar erro amigável
+      let errorMessage = 'Erro ao fazer login. Tente novamente.';
+      
+      if (err.message?.includes('Credenciais inválidas') || 
+          err.message?.includes('Invalid login credentials') ||
+          err.message?.includes('Sessão expirada')) {
+        errorMessage = 'E-mail ou senha incorretos. Verifique suas credenciais e tente novamente.';
+      } else if (err.message?.includes('servidor') || err.message?.includes('conexão')) {
+        errorMessage = 'Não foi possível conectar ao servidor. Tente novamente em alguns instantes.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -81,7 +93,7 @@ export function Login({ onShowSetup, onShowSolicitarAcesso }: LoginProps) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu.email@jardim.ce.gov.br"
+                placeholder="email@email.com"
                 required
                 className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0b6b3a] focus:border-transparent"
               />
@@ -141,6 +153,15 @@ export function Login({ onShowSetup, onShowSolicitarAcesso }: LoginProps) {
           <p className="text-center text-gray-400 text-xs mt-1">
             © 2025 Controladoria Geral do Município
           </p>
+          <div className="text-center mt-3">
+            <a
+              href="/diagnostico"
+              className="text-[#0b6b3a] text-xs font-medium hover:underline inline-flex items-center gap-1"
+            >
+              <Settings className="size-3" />
+              Ferramentas de Diagnóstico
+            </a>
+          </div>
         </div>
       </div>
 
