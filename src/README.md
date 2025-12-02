@@ -89,7 +89,7 @@ supabase login
 supabase link --project-ref yxxkishjqjsoxcjlqdrk
 
 # 4. Deploy da função
-supabase functions deploy hello-world
+supabase functions deploy make-server-1a8b02da
 ```
 
 ### **2️⃣ CRIAR TABELA NO BANCO**

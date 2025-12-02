@@ -6,44 +6,44 @@ O servidor backend foi configurado para funcionar com o Figma Make usando Edge F
 
 ## 📡 Configuração da Edge Function
 
-**Nome da função:** `hello-world`
-**Endpoint base:** `/hello-world`
+**Nome da função:** `make-server-1a8b02da`
+**Endpoint base:** `/make-server-1a8b02da`
 
 ### Endpoints disponíveis:
 
 #### 🔐 Autenticação
-- `POST /hello-world/auth/setup-admin` - Criar admin inicial
-- `POST /hello-world/auth/signup` - Criar novo usuário
-- `POST /hello-world/auth/login` - Fazer login
+- `POST /make-server-1a8b02da/auth/setup-admin` - Criar admin inicial
+- `POST /make-server-1a8b02da/auth/signup` - Criar novo usuário
+- `POST /make-server-1a8b02da/auth/login` - Fazer login
 
 #### 📋 Contratos
-- `GET /hello-world/contratos` - Listar todos
-- `GET /hello-world/contratos/:id` - Ver detalhes
-- `POST /hello-world/contratos` - Criar novo
-- `PUT /hello-world/contratos/:id` - Atualizar
-- `DELETE /hello-world/contratos/:id` - Deletar
+- `GET /make-server-1a8b02da/contratos` - Listar todos
+- `GET /make-server-1a8b02da/contratos/:id` - Ver detalhes
+- `POST /make-server-1a8b02da/contratos` - Criar novo
+- `PUT /make-server-1a8b02da/contratos/:id` - Atualizar
+- `DELETE /make-server-1a8b02da/contratos/:id` - Deletar
 
 #### 👥 Usuários
-- `GET /hello-world/usuarios` - Listar todos
-- `GET /hello-world/usuarios/me` - Dados do usuário logado
-- `PUT /hello-world/usuarios/:id` - Atualizar usuário
-- `DELETE /hello-world/usuarios/:id` - Deletar usuário
+- `GET /make-server-1a8b02da/usuarios` - Listar todos
+- `GET /make-server-1a8b02da/usuarios/me` - Dados do usuário logado
+- `PUT /make-server-1a8b02da/usuarios/:id` - Atualizar usuário
+- `DELETE /make-server-1a8b02da/usuarios/:id` - Deletar usuário
 
 #### 📬 Solicitações de Cadastro
-- `POST /hello-world/solicitar-cadastro` - Enviar solicitação
-- `GET /hello-world/solicitacoes` - Listar (apenas admin)
-- `POST /hello-world/solicitacoes/:id/aprovar` - Aprovar (apenas admin)
-- `POST /hello-world/solicitacoes/:id/rejeitar` - Rejeitar (apenas admin)
+- `POST /make-server-1a8b02da/solicitar-cadastro` - Enviar solicitação
+- `GET /make-server-1a8b02da/solicitacoes` - Listar (apenas admin)
+- `POST /make-server-1a8b02da/solicitacoes/:id/aprovar` - Aprovar (apenas admin)
+- `POST /make-server-1a8b02da/solicitacoes/:id/rejeitar` - Rejeitar (apenas admin)
 
 #### 🔔 Alertas
-- `GET /hello-world/alertas` - Listar alertas
-- `PUT /hello-world/alertas/:id` - Atualizar alerta
+- `GET /make-server-1a8b02da/alertas` - Listar alertas
+- `PUT /make-server-1a8b02da/alertas/:id` - Atualizar alerta
 
 #### 🏢 Secretarias
-- `GET /hello-world/secretarias` - Listar secretarias
-- `POST /hello-world/secretarias` - Criar secretaria
-- `PUT /hello-world/secretarias/:id` - Atualizar
-- `DELETE /hello-world/secretarias/:id` - Deletar
+- `GET /make-server-1a8b02da/secretarias` - Listar secretarias
+- `POST /make-server-1a8b02da/secretarias` - Criar secretaria
+- `PUT /make-server-1a8b02da/secretarias/:id` - Atualizar
+- `DELETE /make-server-1a8b02da/secretarias/:id` - Deletar
 
 ## 🔧 Configuração
 
@@ -95,7 +95,7 @@ O deploy é feito automaticamente pelo Figma Make quando você salva alteraçõe
 
 Se precisar fazer deploy manual:
 ```bash
-supabase functions deploy hello-world
+supabase functions deploy make-server-1a8b02da
 ```
 
 ## ✅ Benefícios dessa abordagem:

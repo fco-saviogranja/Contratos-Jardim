@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, senha: string): Promise<boolean> => {
     try {
-      console.log('🌐 Tentando login com backend Supabase (MODO ONLINE)...');
+      console.log('Tentando login com backend Supabase...');
       
       // Limpar qualquer sessão antiga antes de fazer login
       auth.logout();
@@ -80,6 +80,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Sempre limpar sessão em caso de erro
       auth.logout();
       setUser(null);
+      
+      // Se for erro de backend indisponível, propagar com mensagem clara
+      if (error.message === 'BACKEND_UNAVAILABLE') {
+        throw new Error('BACKEND_UNAVAILABLE');
+      }
+      
+      // Se for erro de rede (Failed to fetch), tratar especialmente
+      if (error.message?.includes('Failed to fetch')) {
+        throw new Error('BACKEND_UNAVAILABLE');
+      }
       
       throw error;
     }

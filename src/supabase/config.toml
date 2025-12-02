@@ -5,6 +5,6 @@
 # Habilitar Edge Functions
 enabled = true
 
-[functions.server]
+[functions.make-server]
 # Verificação JWT desabilitada (controlada pelo config.json)
 verify_jwt = false

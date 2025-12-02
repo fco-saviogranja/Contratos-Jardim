@@ -1,8 +1,0 @@
-[api]
-cors_allowed_origins = [
-  "http://localhost:3000",
-  "https://contratosjardim.vercel.app",
-  "https://transpjardim.jardim.ce.gov.br",
-  "https://*.figma.site"
-]
-

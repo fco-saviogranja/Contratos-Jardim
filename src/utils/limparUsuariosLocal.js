@@ -250,17 +250,322 @@ window.verificarEstadoSistema = () => {
 
 globalThis.verificarEstadoSistema = window.verificarEstadoSistema;
 
+// Função para fazer varredura completa de emails
+window.varreduraCompleta = () => {
+  console.log('');
+  console.log('╔══════════════════════════════════════════════════════════╗');
+  console.log('║          🔍 VARREDURA COMPLETA DE EMAILS                 ║');
+  console.log('╚═══════════════════════════════════════════════════════════╝');
+  console.log('');
+  
+  try {
+    const emailPermitido = 'controleinterno@jardim.ce.gov.br';
+    const emailsEncontrados = new Set();
+    
+    // 1. Verificar mock_users
+    console.log('📋 1. VERIFICANDO USUÁRIOS (mock_users):');
+    const usersStr = localStorage.getItem('mock_users');
+    const users = usersStr ? JSON.parse(usersStr) : [];
+    console.log(`   Total de usuários: ${users.length}`);
+    
+    if (users.length > 0) {
+      users.forEach((u, i) => {
+        console.log(`   ${i + 1}. ${u.email} - ${u.nome} (${u.perfil})`);
+        emailsEncontrados.add(u.email);
+      });
+    } else {
+      console.log('   ✅ Nenhum usuário encontrado');
+    }
+    
+    console.log('');
+    
+    // 2. Verificar mock_solicitacoes
+    console.log('📋 2. VERIFICANDO SOLICITAÇÕES (mock_solicitacoes):');
+    const solicitacoesStr = localStorage.getItem('mock_solicitacoes');
+    const solicitacoes = solicitacoesStr ? JSON.parse(solicitacoesStr) : [];
+    console.log(`   Total de solicitações: ${solicitacoes.length}`);
+    
+    if (solicitacoes.length > 0) {
+      solicitacoes.forEach((s, i) => {
+        console.log(`   ${i + 1}. ${s.email} - ${s.nomeCompleto} (${s.situacao})`);
+        emailsEncontrados.add(s.email);
+      });
+    } else {
+      console.log('   ✅ Nenhuma solicitação encontrada');
+    }
+    
+    console.log('');
+    
+    // 3. Verificar sessão atual
+    console.log('📋 3. VERIFICANDO SESSÃO ATIVA:');
+    const sessionUserStr = localStorage.getItem('contratos_jardim_user');
+    if (sessionUserStr) {
+      const sessionUser = JSON.parse(sessionUserStr);
+      console.log(`   ✅ Usuário logado: ${sessionUser.email} - ${sessionUser.nome}`);
+      emailsEncontrados.add(sessionUser.email);
+    } else {
+      console.log('   ❌ Nenhum usuário logado');
+    }
+    
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+    console.log('📊 RESUMO DA VARREDURA:');
+    console.log('');
+    console.log(`   📧 Total de emails únicos encontrados: ${emailsEncontrados.size}`);
+    console.log('');
+    
+    if (emailsEncontrados.size > 0) {
+      console.log('   📝 Lista completa de emails:');
+      Array.from(emailsEncontrados).forEach((email, i) => {
+        const isPermitido = email === emailPermitido;
+        console.log(`   ${i + 1}. ${email} ${isPermitido ? '✅ (SERÁ MANTIDO)' : '❌ (SERÁ EXCLUÍDO)'}`);
+      });
+    }
+    
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+    
+    return {
+      success: true,
+      totalEmails: emailsEncontrados.size,
+      emails: Array.from(emailsEncontrados),
+      usuarios: users.length,
+      solicitacoes: solicitacoes.length
+    };
+  } catch (error) {
+    console.error('❌ Erro na varredura:', error.message);
+    throw error;
+  }
+};
+
+globalThis.varreduraCompleta = window.varreduraCompleta;
+
+// Função para excluir todos os emails exceto controleinterno@jardim.ce.gov.br
+window.excluirTodosEmailsExcetoGustavo = () => {
+  console.log('');
+  console.log('╔═══════════════════════════════════════════════════════════╗');
+  console.log('║      🗑️ EXCLUIR TODOS OS EMAILS EXCETO GUSTAVO          ║');
+  console.log('╚═══════════════════════════════════════════════════════════╝');
+  console.log('');
+  console.log('⚠️ ATENÇÃO: Esta ação irá:');
+  console.log('   • Excluir TODOS os usuários do localStorage');
+  console.log('   • Excluir TODAS as solicitações de cadastro');
+  console.log('   • Limpar a sessão atual');
+  console.log('   • Manter APENAS: controleinterno@jardim.ce.gov.br');
+  console.log('');
+  
+  try {
+    const emailPermitido = 'controleinterno@jardim.ce.gov.br';
+    
+    // 1. Limpar usuários (manter apenas Gustavo)
+    console.log('🗑️ 1. LIMPANDO USUÁRIOS...');
+    const usersStr = localStorage.getItem('mock_users');
+    const users = usersStr ? JSON.parse(usersStr) : [];
+    const userGustavo = users.find(u => u.email === emailPermitido);
+    
+    let usuariosExcluidos = 0;
+    if (users.length > 0) {
+      usuariosExcluidos = users.length - (userGustavo ? 1 : 0);
+      console.log(`   📊 Total de usuários antes: ${users.length}`);
+      console.log(`   ❌ Usuários que serão excluídos: ${usuariosExcluidos}`);
+      
+      users.forEach(u => {
+        if (u.email !== emailPermitido) {
+          console.log(`      🗑️ Excluindo: ${u.email} - ${u.nome}`);
+        }
+      });
+    }
+    
+    // Criar array apenas com Gustavo
+    const gustavoBarros = userGustavo || {
+      id: 'admin-001',
+      email: 'controleinterno@jardim.ce.gov.br',
+      nome: 'Gustavo Barros',
+      perfil: 'admin',
+      secretaria: 'CGM - Controladoria Geral do Município',
+      situacao: 'ativo',
+      criadoEm: '2024-01-15T10:00:00Z',
+      ultimoAcesso: new Date().toISOString()
+    };
+    
+    localStorage.setItem('mock_users', JSON.stringify([gustavoBarros]));
+    console.log(`   ✅ Usuários após limpeza: 1 (Gustavo Barros)`);
+    console.log('');
+    
+    // 2. Limpar solicitações
+    console.log('🗑️ 2. LIMPANDO SOLICITAÇÕES...');
+    const solicitacoesStr = localStorage.getItem('mock_solicitacoes');
+    const solicitacoes = solicitacoesStr ? JSON.parse(solicitacoesStr) : [];
+    
+    if (solicitacoes.length > 0) {
+      console.log(`   📊 Total de solicitações antes: ${solicitacoes.length}`);
+      solicitacoes.forEach(s => {
+        console.log(`      🗑️ Excluindo solicitação: ${s.email} - ${s.nomeCompleto}`);
+      });
+    }
+    
+    localStorage.removeItem('mock_solicitacoes');
+    console.log(`   ✅ Solicitações após limpeza: 0`);
+    console.log('');
+    
+    // 3. Limpar sessão
+    console.log('🗑️ 3. LIMPANDO SESSÃO...');
+    const sessionUserStr = localStorage.getItem('contratos_jardim_user');
+    if (sessionUserStr) {
+      const sessionUser = JSON.parse(sessionUserStr);
+      if (sessionUser.email !== emailPermitido) {
+        console.log(`   🗑️ Excluindo sessão de: ${sessionUser.email}`);
+        localStorage.removeItem('contratos_jardim_user');
+        localStorage.removeItem('contratos_jardim_token');
+        console.log('   ✅ Sessão limpa!');
+      } else {
+        console.log('   ✅ Sessão do Gustavo mantida!');
+      }
+    } else {
+      console.log('   ✅ Nenhuma sessão ativa');
+    }
+    
+    console.log('');
+    console.log('╔═══════════════════════════════════════════════════════════╗');
+    console.log('║         ✅ LIMPEZA CONCLUÍDA COM SUCESSO!                ║');
+    console.log('╚═══════════════════════════════════════════════════════════╝');
+    console.log('');
+    console.log('📊 RESUMO:');
+    console.log('');
+    console.log(`   ❌ Usuários excluídos: ${usuariosExcluidos}`);
+    console.log(`   ❌ Solicitações excluídas: ${solicitacoes.length}`);
+    console.log('');
+    console.log('📋 ÚNICO EMAIL NO SISTEMA:');
+    console.log('');
+    console.log('   👤 Nome: Gustavo Barros');
+    console.log('   📧 Email: controleinterno@jardim.ce.gov.br');
+    console.log('   🔑 Senha: @Gustavo25');
+    console.log('   🏢 Secretaria: CGM - Controladoria Geral');
+    console.log('   👔 Perfil: Administrador CGM');
+    console.log('');
+    console.log('🔄 PRÓXIMO PASSO:');
+    console.log('   Recarregue a página (F5) para aplicar as mudanças!');
+    console.log('');
+    console.log('💡 DICA:');
+    console.log('   Agora você pode solicitar cadastro com qualquer email!');
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+    
+    return {
+      success: true,
+      usuariosExcluidos,
+      solicitacoesExcluidas: solicitacoes.length,
+      emailMantido: emailPermitido
+    };
+  } catch (error) {
+    console.error('❌ Erro ao excluir emails:', error.message);
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    throw error;
+  }
+};
+
+globalThis.excluirTodosEmailsExcetoGustavo = window.excluirTodosEmailsExcetoGustavo;
+
+// Função de limpeza INSTANTÂNEA (resolve tudo em 1 comando)
+window.limparTudoAgora = () => {
+  console.log('');
+  console.log('╔═══════════════════════════════════════════════════════════╗');
+  console.log('║         🚀 LIMPEZA INSTANTÂNEA - RESOLVER AGORA!         ║');
+  console.log('╚═══════════════════════════════════════════════════════════╝');
+  console.log('');
+  
+  try {
+    const emailPermitido = 'controleinterno@jardim.ce.gov.br';
+    
+    // Limpar TUDO
+    console.log('🗑️ LIMPANDO TUDO...');
+    console.log('');
+    
+    // 1. Criar apenas Gustavo Barros
+    const gustavoBarros = {
+      id: 'admin-001',
+      email: 'controleinterno@jardim.ce.gov.br',
+      nome: 'Gustavo Barros',
+      perfil: 'admin',
+      secretaria: 'CGM - Controladoria Geral do Município',
+      situacao: 'ativo',
+      criadoEm: '2024-01-15T10:00:00Z',
+      ultimoAcesso: new Date().toISOString()
+    };
+    
+    localStorage.setItem('mock_users', JSON.stringify([gustavoBarros]));
+    console.log('✅ 1. Usuários: APENAS Gustavo Barros');
+    
+    // 2. Remover todas as solicitações
+    localStorage.removeItem('mock_solicitacoes');
+    console.log('✅ 2. Solicitações: TODAS removidas');
+    
+    // 3. Limpar sessão se não for Gustavo
+    const sessionUserStr = localStorage.getItem('contratos_jardim_user');
+    if (sessionUserStr) {
+      const sessionUser = JSON.parse(sessionUserStr);
+      if (sessionUser.email !== emailPermitido) {
+        localStorage.removeItem('contratos_jardim_user');
+        localStorage.removeItem('contratos_jardim_token');
+        console.log('✅ 3. Sessão: Limpa');
+      } else {
+        console.log('✅ 3. Sessão: Mantida (Gustavo)');
+      }
+    } else {
+      console.log('✅ 3. Sessão: Nenhuma ativa');
+    }
+    
+    console.log('');
+    console.log('╔═══════════════════════════════════════════════════════════╗');
+    console.log('║              ✅ PRONTO! TUDO LIMPO!                      ║');
+    console.log('╚═══════════════════════════════════════════════════════════╝');
+    console.log('');
+    console.log('🎯 AGORA:');
+    console.log('');
+    console.log('   1. Recarregue a página (F5)');
+    console.log('   2. Solicite o cadastro novamente');
+    console.log('   3. Funcionará! ✅');
+    console.log('');
+    console.log('📧 ÚNICO EMAIL NO SISTEMA:');
+    console.log('   controleinterno@jardim.ce.gov.br');
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+    
+    return { success: true, message: 'Tudo limpo! Recarregue a página (F5)' };
+  } catch (error) {
+    console.error('❌ Erro:', error.message);
+    throw error;
+  }
+};
+
+globalThis.limparTudoAgora = window.limparTudoAgora;
+
 // Log de inicialização
 console.log('');
 console.log('╔═══════════════════════════════════════════════════════════╗');
 console.log('║      🧹 UTILITÁRIO DE LIMPEZA LOCAL - CARREGADO!        ║');
 console.log('╚═══════════════════════════════════════════════════════════╝');
 console.log('');
-console.log('💡 FUNÇÕES DISPONÍVEIS (100% LOCAL, SEM BACKEND):');
+console.log('🚨 ERRO "EMAIL JÁ CADASTRADO"? RESOLVA AGORA:');
 console.log('');
-console.log('   🗑️ limparSistemaCompleto()    - Limpar tudo, manter só Gustavo');
-console.log('   🔄 resetarSistemaInicial()    - Resetar para estado inicial');
-console.log('   🔍 verificarEstadoSistema()   - Ver estado atual do sistema');
+console.log('   🚀 limparTudoAgora()   ← EXECUTE ESTE!');
+console.log('');
+console.log('   Depois: Recarregue (F5) e tente novamente!');
+console.log('');
+console.log('═══════════════════════════════════════════════════════════');
+console.log('');
+console.log('💡 OUTRAS FUNÇÕES DISPONÍVEIS:');
+console.log('');
+console.log('   🔍 varreduraCompleta()                  - Ver TODOS os emails');
+console.log('   🗑️ excluirTodosEmailsExcetoGustavo()   - Excluir tudo exceto Gustavo');
+console.log('   🗑️ limparSistemaCompleto()             - Limpeza completa');
+console.log('   🔄 resetarSistemaInicial()             - Reset total');
+console.log('   🔍 verificarEstadoSistema()            - Estado do sistema');
 console.log('');
 console.log('═══════════════════════════════════════════════════════════');
 console.log('');

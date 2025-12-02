@@ -238,7 +238,7 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
         const authHeader = accessToken ? `Bearer ${accessToken}` : `Bearer ${publicAnonKey}`;
         
         console.log('🔄 Buscando secretarias cadastradas...');
-        const responseSecretarias = await fetch(`https://${projectId}.supabase.co/functions/v1/hello-world/secretarias`, {
+        const responseSecretarias = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-1a8b02da/secretarias`, {
           headers: {
             'Authorization': authHeader
           }
