@@ -19,6 +19,7 @@ import { Toaster } from 'sonner@2.0.3';
 // Utilitários globais disponíveis no console
 import './utils/setupAdminConsole.js';
 import './utils/limparDados.js';
+import './utils/limparUsuariosLocal.js';
 
 function AppContent() {
   const { isAuthenticated } = useAuth();

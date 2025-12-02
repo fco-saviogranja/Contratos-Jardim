@@ -1,15 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { exportToCSV, exportToExcel, exportToPDF, ContratoExport } from '../utils/exportUtils';
 import { ImportarExcelModal } from '../components/ImportarExcelModal';
-import { Search, Download, Edit, FileText, ChevronDown, Plus, Upload, X } from 'lucide-react';
+import { Search, Download, Edit, FileText, ChevronDown, Plus, Upload, X, ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
 import { contratos as contratosAPI } from '../utils/api';
 import { MOCK_CONTRATOS } from '../utils/mockData';
 import { useSecretarias } from '../hooks/useSecretarias';
+import { useGestores } from '../hooks/useGestores';
 import { useAuth } from '../contexts/AuthContext';
+import { getSituacaoAtual, getSituacaoBadgeClass, calcularDiasRestantes, correspondeAoFiltroSituacao } from '../utils/contratoUtils';
 
 interface TodosContratosProps {
   onNavigate: (page: string) => void;
 }
+
+type SortField = 'numero' | 'objeto' | 'contratado' | 'dataFim' | 'status' | 'gestor';
+type SortOrder = 'asc' | 'desc' | null;
+
+// Mapeamento para normalizar nomes de secretarias
+const SECRETARIAS_ALIASES: Record<string, string> = {
+  'GABINETE': 'GAB',
+  'Gabinete do Prefeito': 'GAB',
+  'Gabinete': 'GAB',
+  'SAAEJ': 'SAAEJ',
+  'Secretaria de Assuntos Especiais e Jurídicos': 'SAAEJ',
+};
+
+// Função para normalizar nome de secretaria
+const normalizarSecretaria = (nome: string): string => {
+  if (!nome) return nome;
+  // Verificar se existe um alias
+  return SECRETARIAS_ALIASES[nome] || nome;
+};
 
 export function TodosContratos({ onNavigate }: TodosContratosProps) {
   const { user } = useAuth();
@@ -27,14 +48,43 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
     gestor: 'todos'
   });
   
+  // Estado para ordenação
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(null);
+  
   // Verificar se o usuário pode editar contratos
-  const podeEditar = user?.perfil === 'Administrador CGM' || user?.perfil === 'Gestor de Contratos';
+  const podeEditar = user?.perfil === 'Administrador CGM' || user?.perfil === 'Gestor de Contratos' || user?.perfil === 'admin' || user?.perfil === 'gestor';
+  
+  // Verificar se é fiscal (só pode registrar ações)
+  const eFiscal = user?.perfil === 'Fiscal de Contratos' || user?.perfil === 'fiscal';
+  
+  // Debug: Verificar perfil do usuário
+  useEffect(() => {
+    if (user) {
+      console.log('👤 [DEBUG PERFIL] Usuário logado:', {
+        nome: user.nome,
+        email: user.email,
+        perfil: user.perfil,
+        perfilTipo: typeof user.perfil,
+        perfilLength: user.perfil?.length,
+        podeEditar,
+        eFiscal
+      });
+    }
+  }, [user, podeEditar, eFiscal]);
 
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [contratos, setContratos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { secretarias } = useSecretarias();
+  const { gestores } = useGestores();
+  
+  // Debug: Verificar secretarias carregadas
+  useEffect(() => {
+    console.log('📋 [DEBUG SECRETARIAS] Total de secretarias:', secretarias.length);
+    console.log('📋 [DEBUG SECRETARIAS] Lista:', secretarias);
+  }, [secretarias]);
   
   // Carregar contratos da API
   useEffect(() => {
@@ -50,6 +100,11 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
         if (response.success && response.contratos) {
           console.log(`✅ ${response.contratos.length} contratos carregados da API`);
           console.log('📋 Primeiros 3 contratos:', response.contratos.slice(0, 3));
+          
+          // Debug: Listar todas as secretarias únicas nos contratos
+          const secretariasUnicas = [...new Set(response.contratos.map((c: any) => c.secretaria))];
+          console.log('📋 [DEBUG] Secretarias únicas nos contratos:', secretariasUnicas);
+          
           setContratos(response.contratos);
         } else {
           console.warn('⚠️ Resposta da API sem contratos');
@@ -68,8 +123,134 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
     carregarContratos();
   }, []);
   
-  // Para usar os contratos diretamente (no futuro será com filtros)
-  const filteredContratos = contratos;
+  // Função para alternar ordenação
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // Se já está ordenando por este campo, alterar a ordem
+      if (sortOrder === 'asc') {
+        setSortOrder('desc');
+      } else if (sortOrder === 'desc') {
+        // Se está em desc, remover ordenação
+        setSortField(null);
+        setSortOrder(null);
+      } else {
+        setSortOrder('asc');
+      }
+    } else {
+      // Se é um novo campo, começar com ordem crescente
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  // Renderizar ícone de ordenação
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="size-3.5 text-gray-400" />;
+    }
+    if (sortOrder === 'asc') {
+      return <ArrowUp className="size-3.5 text-[#0b6b3a]" />;
+    }
+    if (sortOrder === 'desc') {
+      return <ArrowDown className="size-3.5 text-[#0b6b3a]" />;
+    }
+    return <ArrowUpDown className="size-3.5 text-gray-400" />;
+  };
+  
+  // Para usar os contratos diretamente com ordenação e filtros aplicados
+  const filteredContratos = React.useMemo(() => {
+    let resultado = [...contratos];
+
+    console.log('🔍 [FILTRO] Iniciando filtros...');
+    console.log('🔍 [FILTRO] Total de contratos antes do filtro:', resultado.length);
+    console.log('🔍 [FILTRO] Filtros ativos:', filtros);
+
+    // Aplicar filtros
+    // Filtro por busca (número, objeto ou contratado)
+    if (filtros.busca.trim() !== '') {
+      const buscaLower = filtros.busca.toLowerCase();
+      resultado = resultado.filter(c => 
+        c.numero?.toLowerCase().includes(buscaLower) ||
+        c.objeto?.toLowerCase().includes(buscaLower) ||
+        c.contratado?.toLowerCase().includes(buscaLower)
+      );
+      console.log('🔍 [FILTRO] Após filtro de busca:', resultado.length);
+    }
+
+    // Filtro por secretaria
+    if (filtros.secretaria !== 'todas') {
+      console.log('🔍 [FILTRO] Filtrando por secretaria:', filtros.secretaria);
+      console.log('🔍 [FILTRO] Tipo de filtros.secretaria:', typeof filtros.secretaria);
+      
+      // Debug: verificar primeiros 3 contratos
+      console.log('🔍 [FILTRO] Secretarias dos primeiros 3 contratos:', 
+        resultado.slice(0, 3).map(c => ({ 
+          numero: c.numero, 
+          secretaria: c.secretaria,
+          secretariaNormalizada: normalizarSecretaria(c.secretaria),
+          secretariaId: c.secretariaId,
+          tipoSecretaria: typeof c.secretaria 
+        }))
+      );
+      
+      // Normalizar secretaria do contrato antes de comparar
+      resultado = resultado.filter(c => {
+        const secretariaContratoNormalizada = normalizarSecretaria(c.secretaria);
+        return c.secretariaId === filtros.secretaria || 
+               c.secretaria === filtros.secretaria ||
+               secretariaContratoNormalizada === filtros.secretaria;
+      });
+      console.log('🔍 [FILTRO] Após filtro de secretaria:', resultado.length);
+    }
+
+    // Filtro por situação
+    if (filtros.situacao !== 'todas') {
+      resultado = resultado.filter(c => correspondeAoFiltroSituacao(c.dataFim, filtros.situacao));
+      console.log('🔍 [FILTRO] Após filtro de situação:', resultado.length);
+    }
+
+    // Filtro por gestor
+    if (filtros.gestor !== 'todos') {
+      resultado = resultado.filter(c => c.gestorId === filtros.gestor);
+      console.log('🔍 [FILTRO] Após filtro de gestor:', resultado.length);
+    }
+
+    console.log('🔍 [FILTRO] Total final após todos os filtros:', resultado.length);
+
+    // Aplicar ordenação se houver
+    if (sortField && sortOrder) {
+      resultado.sort((a, b) => {
+        let valorA = a[sortField];
+        let valorB = b[sortField];
+
+        // Tratamento especial para datas
+        if (sortField === 'dataFim') {
+          valorA = new Date(valorA).getTime();
+          valorB = new Date(valorB).getTime();
+        }
+
+        // Tratamento para valores nulos/undefined
+        if (valorA == null) valorA = '';
+        if (valorB == null) valorB = '';
+
+        // Conversão para string para comparação
+        if (typeof valorA === 'string') {
+          valorA = valorA.toLowerCase();
+        }
+        if (typeof valorB === 'string') {
+          valorB = valorB.toLowerCase();
+        }
+
+        if (sortOrder === 'asc') {
+          return valorA > valorB ? 1 : valorA < valorB ? -1 : 0;
+        } else {
+          return valorA < valorB ? 1 : valorA > valorB ? -1 : 0;
+        }
+      });
+    }
+
+    return resultado;
+  }, [contratos, sortField, sortOrder, filtros]);
 
   const handleLimparFiltros = () => {
     setFiltros({
@@ -78,11 +259,6 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
       situacao: 'todas',
       gestor: 'todos'
     });
-  };
-
-  const aplicarFiltros = () => {
-    console.log('Aplicando filtros:', filtros);
-    // No futuro: fetchContratos(filtros);
   };
 
   const handleEditar = (contratoId: string) => {
@@ -102,6 +278,31 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
     if (contrato) {
       setContratoSelecionado(contrato);
       setShowAcaoModal(true);
+    }
+  };
+  
+  const handleExcluir = async (contratoId: string) => {
+    const contrato = contratos.find(c => c.id === contratoId);
+    if (!contrato) return;
+    
+    const confirmacao = confirm(
+      `Tem certeza que deseja excluir o contrato "${contrato.numero}"?\n\n` +
+      `Esta ação não pode ser desfeita.`
+    );
+    
+    if (confirmacao) {
+      try {
+        // Aqui você adicionaria a chamada à API para excluir o contrato
+        console.log('Excluindo contrato:', contratoId);
+        
+        // Simular exclusão removendo do estado local
+        setContratos(contratos.filter(c => c.id !== contratoId));
+        
+        alert(`Contrato "${contrato.numero}" excluído com sucesso!`);
+      } catch (error) {
+        console.error('Erro ao excluir contrato:', error);
+        alert('Erro ao excluir contrato. Tente novamente.');
+      }
     }
   };
   
@@ -166,37 +367,6 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
     setShowExportMenu(false);
   };
 
-  const getSituacaoBadge = (status: string) => {
-    // Mapeamento de status do banco para situações de exibição
-    const statusMap: Record<string, string> = {
-      'ativo': 'vigente',
-      'vigente': 'vigente',
-      'proximo_vencimento': 'proximo_vencimento',
-      'vencido': 'vencido',
-      'encerrado': 'vencido'
-    };
-    
-    const situacao = statusMap[status?.toLowerCase()] || 'vigente';
-    
-    const styles = {
-      vigente: 'bg-green-100 text-green-700',
-      proximo_vencimento: 'bg-amber-100 text-amber-700',
-      vencido: 'bg-red-100 text-red-700'
-    };
-    
-    const labels = {
-      vigente: 'Vigente',
-      proximo_vencimento: 'Próx. vencimento',
-      vencido: 'Vencido'
-    };
-    
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[situacao as keyof typeof styles]}`}>
-        {labels[situacao as keyof typeof labels]}
-      </span>
-    );
-  };
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -205,7 +375,11 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR');
+    // Converter data AAAA-MM-DD para DD/MM/AAAA garantindo timezone local
+    const [ano, mes, dia] = dateString.split('-');
+    // Criar data no timezone local (não UTC) para evitar problemas de fuso horário
+    const data = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+    return data.toLocaleDateString('pt-BR');
   };
 
   return (
@@ -300,7 +474,7 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
             >
               <option value="todas">Todas</option>
               {secretarias.map(secretaria => (
-                <option key={secretaria.id} value={secretaria.id}>{secretaria.nome}</option>
+                <option key={secretaria.id} value={secretaria.nome}>{secretaria.nome}</option>
               ))}
             </select>
           </div>
@@ -331,17 +505,14 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
               onChange={(e) => setFiltros({ ...filtros, gestor: e.target.value })}
             >
               <option value="todos">Todos</option>
-              <option value="carlos_souza">Carlos Souza</option>
-              <option value="ana_pereira">Ana Pereira</option>
-              <option value="roberto_alves">Roberto Alves</option>
+              {gestores.map(gestor => (
+                <option key={gestor.id} value={gestor.id}>{gestor.nome}</option>
+              ))}
             </select>
           </div>
           
-          <button className="px-4 py-2 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium" onClick={aplicarFiltros}>
-            Filtrar
-          </button>
           <button className="px-4 py-2 bg-gray-100 text-gray-600 rounded-md text-sm hover:bg-gray-200 font-medium" onClick={handleLimparFiltros}>
-            Limpar
+            Limpar filtros
           </button>
         </div>
       </div>
@@ -352,23 +523,59 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
-                  Número
+                <th 
+                  className="px-4 py-3 text-left text-gray-600 text-sm font-medium cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  onClick={() => handleSort('numero')}
+                >
+                  <div className="flex items-center gap-2">
+                    Número
+                    {renderSortIcon('numero')}
+                  </div>
                 </th>
-                <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
-                  Objeto
+                <th 
+                  className="px-4 py-3 text-left text-gray-600 text-sm font-medium cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  onClick={() => handleSort('objeto')}
+                >
+                  <div className="flex items-center gap-2">
+                    Objeto
+                    {renderSortIcon('objeto')}
+                  </div>
                 </th>
-                <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
-                  Fornecedor
+                <th 
+                  className="px-4 py-3 text-left text-gray-600 text-sm font-medium cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  onClick={() => handleSort('contratado')}
+                >
+                  <div className="flex items-center gap-2">
+                    Fornecedor
+                    {renderSortIcon('contratado')}
+                  </div>
                 </th>
-                <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
-                  Vencimento
+                <th 
+                  className="px-4 py-3 text-left text-gray-600 text-sm font-medium cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  onClick={() => handleSort('dataFim')}
+                >
+                  <div className="flex items-center gap-2">
+                    Vencimento
+                    {renderSortIcon('dataFim')}
+                  </div>
                 </th>
-                <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
-                  Situação
+                <th 
+                  className="px-4 py-3 text-left text-gray-600 text-sm font-medium cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  onClick={() => handleSort('status')}
+                >
+                  <div className="flex items-center gap-2">
+                    Situação
+                    {renderSortIcon('status')}
+                  </div>
                 </th>
-                <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
-                  Gestor
+                <th 
+                  className="px-4 py-3 text-left text-gray-600 text-sm font-medium cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                  onClick={() => handleSort('gestor')}
+                >
+                  <div className="flex items-center gap-2">
+                    Gestor
+                    {renderSortIcon('gestor')}
+                  </div>
                 </th>
                 <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
                   Ações
@@ -419,7 +626,9 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
                     {formatDate(contrato.dataFim)}
                   </td>
                   <td className="px-4 py-3">
-                    {getSituacaoBadge(contrato.status)}
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getSituacaoBadgeClass(getSituacaoAtual(contrato.dataFim))}`}>
+                      {getSituacaoAtual(contrato.dataFim)}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-[#102a43] text-sm">
                     {contrato.gestor || '-'}
@@ -442,6 +651,15 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
                       >
                         <FileText className="size-4 text-gray-600" />
                       </button>
+                      {podeEditar && (
+                        <button 
+                          className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+                          title="Excluir"
+                          onClick={() => handleExcluir(contrato.id)}
+                        >
+                          <Trash2 className="size-4 text-gray-600" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -706,7 +924,7 @@ export function TodosContratos({ onNavigate }: TodosContratosProps) {
                   </select>
                 </div>
 
-                {/* Observações */}
+                {/* Observaçes */}
                 <div className="md:col-span-2">
                   <label className="block text-gray-700 text-sm mb-2 font-medium">
                     Observações

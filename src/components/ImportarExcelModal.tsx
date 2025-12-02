@@ -335,6 +335,51 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
         
         processados++;
         
+        // Função para converter número serial do Excel em data DD/MM/AAAA
+        const converterDataExcel = (valor: any): string => {
+          if (!valor) return '';
+          
+          const valorStr = String(valor).trim();
+          
+          // Se já está no formato DD/MM/AAAA, retornar como está
+          const regexData = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+          if (regexData.test(valorStr)) {
+            return valorStr;
+          }
+          
+          // Se é um número (serial do Excel)
+          const numeroSerial = Number(valorStr);
+          if (!isNaN(numeroSerial) && numeroSerial > 0) {
+            try {
+              // Converter número serial do Excel para data JavaScript
+              // Excel conta dias desde 01/01/1900, JavaScript desde 01/01/1970
+              // Diferença: 25569 dias
+              // Criar data em UTC para evitar problemas de timezone
+              const dataJS = new Date(Date.UTC(1970, 0, 1));
+              dataJS.setUTCDate(dataJS.getUTCDate() + (numeroSerial - 25569));
+              
+              // Verificar se a data é válida
+              if (isNaN(dataJS.getTime())) {
+                return valorStr; // Retornar valor original se conversão falhar
+              }
+              
+              // Formatar como DD/MM/AAAA usando UTC para evitar problemas de timezone
+              const dia = String(dataJS.getUTCDate()).padStart(2, '0');
+              const mes = String(dataJS.getUTCMonth() + 1).padStart(2, '0');
+              const ano = dataJS.getUTCFullYear();
+              
+              const dataFormatada = `${dia}/${mes}/${ano}`;
+              console.log(`  🔄 Convertido número serial ${numeroSerial} → ${dataFormatada}`);
+              return dataFormatada;
+            } catch (error) {
+              console.warn(`  ⚠️ Erro ao converter data serial ${numeroSerial}:`, error);
+              return valorStr;
+            }
+          }
+          
+          return valorStr;
+        };
+        
         // Extrair dados das colunas conforme ordem definida
         // COLUNA A (índice 0): Secretaria
         // COLUNA B (índice 1): Contratado
@@ -343,7 +388,7 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
         const secretaria = linha[0] ? String(linha[0]).trim() : '';
         const contratado = linha[1] ? String(linha[1]).trim() : '';
         const objeto = linha[2] ? String(linha[2]).trim() : '';
-        const dataFinal = linha[3] ? String(linha[3]).trim() : '';
+        const dataFinal = converterDataExcel(linha[3]); // Converter data do Excel
         
         console.log(`\n📊 Linha ${numeroLinha}:`);
         console.log(`  ├─ Coluna A (Secretaria): "${secretaria}"`);
@@ -481,7 +526,10 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
 
   const importarContratos = async () => {
     try {
-      console.log('🚀 Iniciando importação de contratos...');
+      console.log('🚀 [IMPORTAÇÃO] Iniciando importação de contratos...');
+      console.log('📊 [IMPORTAÇÃO] Total de linhas para importar:', linhasParaImportar.length);
+      console.log('📋 [IMPORTAÇÃO] Linhas para importar:', linhasParaImportar);
+      
       setEtapa('preview'); // Mostra loading
       
       let contratosImportados = 0;
@@ -499,11 +547,19 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
           const objeto = linha[2] ? String(linha[2]).trim() : '';
           const dataFinal = linha[3] ? String(linha[3]).trim() : '';
           
+          console.log(`\n📝 [IMPORTAÇÃO] Processando linha ${i}:`, {
+            secretaria,
+            contratado,
+            objeto,
+            dataFinal
+          });
+          
           // Se a secretaria estava no mapeamento, usar o valor mapeado
           if (mapeamentos[secretaria]) {
+            console.log(`  🔄 [IMPORTAÇÃO] Secretaria mapeada: "${secretaria}" → "${mapeamentos[secretaria]}"`);
             if (mapeamentos[secretaria] === '__NOVA__') {
               // TODO: Implementar cadastro de nova secretaria
-              console.warn(`⚠️ Cadastro de nova secretaria não implementado: ${secretaria}`);
+              console.warn(`⚠️ [IMPORTAÇÃO] Cadastro de nova secretaria não implementado: ${secretaria}`);
               errosImportacao.push(`Linha ${i + 1}: Cadastro de nova secretaria não implementado`);
               continue;
             } else {
@@ -517,12 +573,14 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
           );
           
           if (secretariaEncontrada) {
+            console.log(`  ✅ [IMPORTAÇÃO] Secretaria encontrada pela sigla: "${linha[0]}" → "${secretariaEncontrada.nome}"`);
             secretaria = secretariaEncontrada.nome;
           }
           
           // Validar campos obrigatórios
           if (!secretaria || !contratado || !objeto || !dataFinal) {
-            console.warn(`⚠️ Linha ${i + 1}: Campos obrigatórios faltando`);
+            console.warn(`⚠️ [IMPORTAÇÃO] Linha ${i + 1}: Campos obrigatórios faltando`);
+            errosImportacao.push(`Linha ${i + 1}: Campos obrigatórios faltando`);
             continue;
           }
           
@@ -540,29 +598,34 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
             fiscal: '' // Opcional
           };
           
-          console.log(`📝 Importando contrato ${i}:`, contratoData);
+          console.log(`📝 [IMPORTAÇÃO] Dados do contrato a ser criado:`, contratoData);
           
           // Salvar no backend
+          console.log(`🌐 [IMPORTAÇÃO] Chamando API para criar contrato...`);
           const response = await contratosAPI.create(contratoData);
+          
+          console.log(`📡 [IMPORTAÇÃO] Resposta da API:`, response);
           
           if (response.success) {
             contratosImportados++;
-            console.log(`✅ Contrato ${i} importado com sucesso`);
+            console.log(`✅ [IMPORTAÇÃO] Contrato ${i} importado com sucesso!`);
+            console.log(`📊 [IMPORTAÇÃO] Total importados até agora: ${contratosImportados}`);
           } else {
             errosImportacao.push(`Linha ${i + 1}: ${response.error || 'Erro desconhecido'}`);
-            console.error(`❌ Erro ao importar contrato ${i}:`, response.error);
+            console.error(`❌ [IMPORTAÇÃO] Erro ao importar contrato ${i}:`, response.error);
           }
           
         } catch (error) {
           errosImportacao.push(`Linha ${i + 1}: ${error.message}`);
-          console.error(`❌ Erro ao processar linha ${i}:`, error);
+          console.error(`❌ [IMPORTAÇÃO] Erro ao processar linha ${i}:`, error);
         }
       }
       
-      console.log(`✅ Importação concluída: ${contratosImportados} contratos importados`);
+      console.log(`\n✅ [IMPORTAÇÃO] Importação concluída!`);
+      console.log(`📊 [IMPORTAÇÃO] Total de contratos importados: ${contratosImportados}/${linhasParaImportar.length}`);
       
       if (errosImportacao.length > 0) {
-        console.warn('⚠️ Erros durante importação:', errosImportacao);
+        console.warn('⚠️ [IMPORTAÇÃO] Erros durante importação:', errosImportacao);
       }
       
       // Atualizar validação com resultado
@@ -575,12 +638,13 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
       setEtapa('sucesso');
       
       // Recarregar página após 2 segundos para mostrar novos contratos
+      console.log('🔄 [IMPORTAÇÃO] Recarregando página em 2 segundos...');
       setTimeout(() => {
         window.location.reload();
       }, 2000);
       
     } catch (error) {
-      console.error('❌ Erro fatal durante importação:', error);
+      console.error('❌ [IMPORTAÇÃO] Erro fatal durante importação:', error);
       alert('Erro ao importar contratos. Verifique o console para mais detalhes.');
       setEtapa('validacao');
     }
@@ -770,23 +834,82 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
                   </div>
 
                   {/* Erros */}
-                  {validacao.erros.length > 0 && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                      <h3 className="text-red-900 font-medium text-sm mb-3 flex items-center gap-2">
-                        <AlertCircle className="size-4" />
-                        Erros encontrados
-                      </h3>
-                      <ul className="text-red-800 text-sm space-y-2">
-                        {validacao.erros.map((erro, idx) => (
-                          <li key={idx} className="flex items-start gap-2">
-                            <span className="text-red-600 mt-0.5">•</span>
-                            <span>{erro}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
+                  {validacao.erros.length > 0 && (() => {
+                    // Categorizar erros
+                    const categoriasErros = {
+                      camposVazios: validacao.erros.filter(e => e.includes('não informad')),
+                      dataInvalida: validacao.erros.filter(e => e.includes('Data final da vigência inválida')),
+                      secretariaNaoEncontrada: validacao.erros.filter(e => e.includes('Secretaria não encontrada')),
+                      contratosDuplicados: validacao.erros.filter(e => e.includes('duplicado'))
+                    };
+                    
+                    const totalErros = validacao.erros.length;
+                    const [errosExpandidos, setErrosExpandidos] = React.useState(totalErros <= 10);
+                    
+                    return (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <h3 className="text-red-900 font-medium text-sm mb-3 flex items-center gap-2">
+                          <AlertCircle className="size-4" />
+                          {totalErros} {totalErros === 1 ? 'Erro encontrado' : 'Erros encontrados'}
+                        </h3>
+                        
+                        {/* Resumo por categoria */}
+                        <div className="grid grid-cols-2 gap-2 mb-4">
+                          {categoriasErros.camposVazios.length > 0 && (
+                            <div className="bg-white rounded border border-red-200 p-2">
+                              <p className="text-red-600 font-medium text-xs">
+                                {categoriasErros.camposVazios.length} campos vazios
+                              </p>
+                            </div>
+                          )}
+                          {categoriasErros.dataInvalida.length > 0 && (
+                            <div className="bg-white rounded border border-red-200 p-2">
+                              <p className="text-red-600 font-medium text-xs">
+                                {categoriasErros.dataInvalida.length} datas inválidas
+                              </p>
+                            </div>
+                          )}
+                          {categoriasErros.secretariaNaoEncontrada.length > 0 && (
+                            <div className="bg-white rounded border border-red-200 p-2">
+                              <p className="text-red-600 font-medium text-xs">
+                                {categoriasErros.secretariaNaoEncontrada.length} secretarias não encontradas
+                              </p>
+                            </div>
+                          )}
+                          {categoriasErros.contratosDuplicados.length > 0 && (
+                            <div className="bg-white rounded border border-red-200 p-2">
+                              <p className="text-red-600 font-medium text-xs">
+                                {categoriasErros.contratosDuplicados.length} contratos duplicados
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Lista de erros */}
+                        <div className={`space-y-2 ${!errosExpandidos && totalErros > 10 ? 'max-h-48 overflow-hidden' : ''}`}>
+                          <ul className="text-red-800 text-sm space-y-2">
+                            {validacao.erros.map((erro, idx) => (
+                              <li key={idx} className="flex items-start gap-2">
+                                <span className="text-red-600 mt-0.5">•</span>
+                                <span>{erro}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        
+                        {/* Botão para expandir/colapsar quando há muitos erros */}
+                        {totalErros > 10 && (
+                          <button
+                            onClick={() => setErrosExpandidos(!errosExpandidos)}
+                            className="mt-3 text-red-700 text-sm font-medium hover:text-red-800 underline"
+                          >
+                            {errosExpandidos ? 'Mostrar menos' : `Mostrar todos os ${totalErros} erros`}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  
                   {validacao.validos > 0 && (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                       <p className="text-green-900 text-sm">
@@ -979,23 +1102,82 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
                   </div>
 
                   {/* Erros */}
-                  {validacao.erros.length > 0 && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-h-60 overflow-y-auto">
-                      <h3 className="text-red-900 font-medium text-sm mb-3 flex items-center gap-2">
-                        <AlertCircle className="size-4" />
-                        Erros encontrados
-                      </h3>
-                      <ul className="text-red-800 text-sm space-y-2">
-                        {validacao.erros.map((erro, idx) => (
-                          <li key={idx} className="flex items-start gap-2">
-                            <span className="text-red-600 mt-0.5">•</span>
-                            <span>{erro}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
+                  {validacao.erros.length > 0 && (() => {
+                    // Categorizar erros
+                    const categoriasErros = {
+                      camposVazios: validacao.erros.filter(e => e.includes('não informad')),
+                      dataInvalida: validacao.erros.filter(e => e.includes('Data final da vigência inválida')),
+                      secretariaNaoEncontrada: validacao.erros.filter(e => e.includes('Secretaria não encontrada')),
+                      contratosDuplicados: validacao.erros.filter(e => e.includes('duplicado'))
+                    };
+                    
+                    const totalErros = validacao.erros.length;
+                    const [errosExpandidos, setErrosExpandidos] = React.useState(totalErros <= 10);
+                    
+                    return (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-h-60 overflow-y-auto">
+                        <h3 className="text-red-900 font-medium text-sm mb-3 flex items-center gap-2">
+                          <AlertCircle className="size-4" />
+                          {totalErros} {totalErros === 1 ? 'Erro encontrado' : 'Erros encontrados'}
+                        </h3>
+                        
+                        {/* Resumo por categoria */}
+                        <div className="grid grid-cols-2 gap-2 mb-4">
+                          {categoriasErros.camposVazios.length > 0 && (
+                            <div className="bg-white rounded border border-red-200 p-2">
+                              <p className="text-red-600 font-medium text-xs">
+                                {categoriasErros.camposVazios.length} campos vazios
+                              </p>
+                            </div>
+                          )}
+                          {categoriasErros.dataInvalida.length > 0 && (
+                            <div className="bg-white rounded border border-red-200 p-2">
+                              <p className="text-red-600 font-medium text-xs">
+                                {categoriasErros.dataInvalida.length} datas inválidas
+                              </p>
+                            </div>
+                          )}
+                          {categoriasErros.secretariaNaoEncontrada.length > 0 && (
+                            <div className="bg-white rounded border border-red-200 p-2">
+                              <p className="text-red-600 font-medium text-xs">
+                                {categoriasErros.secretariaNaoEncontrada.length} secretarias não encontradas
+                              </p>
+                            </div>
+                          )}
+                          {categoriasErros.contratosDuplicados.length > 0 && (
+                            <div className="bg-white rounded border border-red-200 p-2">
+                              <p className="text-red-600 font-medium text-xs">
+                                {categoriasErros.contratosDuplicados.length} contratos duplicados
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Lista de erros */}
+                        <div className={`space-y-2 ${!errosExpandidos && totalErros > 10 ? 'max-h-48 overflow-hidden' : ''}`}>
+                          <ul className="text-red-800 text-sm space-y-2">
+                            {validacao.erros.map((erro, idx) => (
+                              <li key={idx} className="flex items-start gap-2">
+                                <span className="text-red-600 mt-0.5">•</span>
+                                <span>{erro}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        
+                        {/* Botão para expandir/colapsar quando há muitos erros */}
+                        {totalErros > 10 && (
+                          <button
+                            onClick={() => setErrosExpandidos(!errosExpandidos)}
+                            className="mt-3 text-red-700 text-sm font-medium hover:text-red-800 underline"
+                          >
+                            {errosExpandidos ? 'Mostrar menos' : `Mostrar todos os ${totalErros} erros`}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  
                   {validacao.validos > 0 && (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                       <p className="text-green-900 text-sm">
@@ -1021,11 +1203,18 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
                 {validacao.validos} contratos foram importados com sucesso para o sistema.
               </p>
               
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-md mx-auto">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-md mx-auto mb-6">
                 <p className="text-green-900 text-sm">
                   Os contratos já estão disponíveis na listagem e podem ser visualizados e editados normalmente.
                 </p>
               </div>
+              
+              <button
+                onClick={onClose}
+                className="px-6 py-2.5 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium inline-flex items-center gap-2"
+              >
+                Fechar e visualizar contratos
+              </button>
             </div>
           )}
         </div>

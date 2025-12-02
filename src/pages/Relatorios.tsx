@@ -4,6 +4,7 @@ import { FileText, Download, Calendar, TrendingUp, AlertTriangle, FileCheck, Use
 import { contratos as contratosAPI } from '../utils/api';
 import { MOCK_CONTRATOS } from '../utils/mockData';
 import { useSecretarias } from '../hooks/useSecretarias';
+import { getSituacaoAtual } from '../utils/contratoUtils';
 
 interface RelatorioConfig {
   id: string;
@@ -211,16 +212,14 @@ export function Relatorios() {
     : relatoriosPredefinidos.filter(r => r.categoria === categoriaAtiva);
 
   const gerarRelatorio = (relatorioId: string, formato: 'csv' | 'excel' | 'pdf') => {
-    // Preparar dados baseado no tipo de relatório
+    // Preparar dados baseado no tipo de relatório - SEM colunas "Valor" e "Início"
     const dados = contratos.map(contrato => ({
       numero: contrato.numero,
       objeto: contrato.objeto,
       contratado: contrato.contratado,
-      valor: `R$ ${contrato.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-      inicio: contrato.dataInicio,
-      vencimento: contrato.dataFinal,
-      situacao: contrato.situacao,
-      gestor: contrato.gestor,
+      vencimento: contrato.dataFim || contrato.dataTermino, // Suporte para ambos os formatos
+      situacao: contrato.dataFim ? getSituacaoAtual(contrato.dataFim) : (contrato.dataTermino ? getSituacaoAtual(contrato.dataTermino) : 'N/A'),
+      gestor: contrato.gestor || contrato.gestorContrato,
       secretaria: contrato.secretaria
     }));
 

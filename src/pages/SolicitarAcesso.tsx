@@ -79,8 +79,16 @@ export function SolicitarAcesso() {
         errorMessage = err.message;
       }
       
+      // Verificar se o e-mail já está cadastrado
+      if (err.message && err.message.includes('já está cadastrado')) {
+        errorMessage = '❌ Este e-mail já possui cadastro no sistema.\n\n' +
+          '💡 Possíveis soluções:\n' +
+          '1. Faça login usando este e-mail na tela de login\n' +
+          '2. Se esqueceu sua senha, entre em contato com o administrador\n' +
+          '3. Use outro e-mail institucional para solicitar acesso';
+      }
       // Verificar se é erro de conexão
-      if (err.message && err.message.includes('Failed to fetch')) {
+      else if (err.message && err.message.includes('Failed to fetch')) {
         errorMessage = '❌ Não foi possível conectar ao servidor.\n\n' +
           '🔧 Possíveis soluções:\n' +
           '1. Verifique sua conexão com a internet\n' +

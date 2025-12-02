@@ -4,8 +4,6 @@ export interface ContratoExport {
   numero: string;
   objeto: string;
   contratado: string;
-  valor: string;
-  inicio: string;
   vencimento: string;
   situacao: string;
   gestor: string;
@@ -14,7 +12,7 @@ export interface ContratoExport {
 
 // Exportar para CSV
 export function exportToCSV(data: ContratoExport[], filename: string = 'contratos') {
-  const headers = ['Número', 'Objeto', 'Contratado', 'Valor', 'Início', 'Vencimento', 'Situação', 'Gestor', 'Secretaria'];
+  const headers = ['Número', 'Objeto', 'Contratado', 'Vencimento', 'Situação', 'Gestor', 'Secretaria'];
   
   const csvContent = [
     headers.join(';'),
@@ -22,8 +20,6 @@ export function exportToCSV(data: ContratoExport[], filename: string = 'contrato
       row.numero,
       `"${row.objeto}"`,
       `"${row.contratado}"`,
-      row.valor,
-      row.inicio,
       row.vencimento,
       row.situacao,
       `"${row.gestor}"`,
@@ -47,7 +43,7 @@ export function exportToCSV(data: ContratoExport[], filename: string = 'contrato
 
 // Exportar para Excel (formato HTML que o Excel reconhece)
 export function exportToExcel(data: ContratoExport[], filename: string = 'contratos') {
-  const headers = ['Número', 'Objeto', 'Contratado', 'Valor', 'Início', 'Vencimento', 'Situação', 'Gestor', 'Secretaria'];
+  const headers = ['Número', 'Objeto', 'Contratado', 'Vencimento', 'Situação', 'Gestor', 'Secretaria'];
   
   let htmlContent = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
@@ -73,8 +69,6 @@ export function exportToExcel(data: ContratoExport[], filename: string = 'contra
                 <td>${row.numero}</td>
                 <td>${row.objeto}</td>
                 <td>${row.contratado}</td>
-                <td>${row.valor}</td>
-                <td>${row.inicio}</td>
                 <td>${row.vencimento}</td>
                 <td>${row.situacao}</td>
                 <td>${row.gestor}</td>
@@ -101,7 +95,7 @@ export function exportToExcel(data: ContratoExport[], filename: string = 'contra
 
 // Exportar para PDF (usando HTML e window.print)
 export function exportToPDF(data: ContratoExport[], filename: string = 'contratos') {
-  const headers = ['Número', 'Objeto', 'Contratado', 'Valor', 'Início', 'Vencimento', 'Situação', 'Gestor', 'Secretaria'];
+  const headers = ['Número', 'Objeto', 'Contratado', 'Vencimento', 'Situação', 'Gestor', 'Secretaria'];
   
   const printWindow = window.open('', '_blank');
   
@@ -182,10 +176,8 @@ export function exportToPDF(data: ContratoExport[], filename: string = 'contrato
             ${data.map(row => `
               <tr>
                 <td>${row.numero}</td>
-                <td>${row.objeto.length > 60 ? row.objeto.substring(0, 60) + '...' : row.objeto}</td>
+                <td>${row.objeto.length > 80 ? row.objeto.substring(0, 80) + '...' : row.objeto}</td>
                 <td>${row.contratado}</td>
-                <td>${row.valor}</td>
-                <td>${row.inicio}</td>
                 <td>${row.vencimento}</td>
                 <td>${row.situacao}</td>
                 <td>${row.gestor}</td>

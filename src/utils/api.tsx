@@ -9,17 +9,34 @@ const SERVER_URL = `${SUPABASE_URL}/functions/v1/make-server-1a8b02da`;
 interface AuthState {
   accessToken: string | null;
   user: any | null;
+  offlineMode: boolean;
 }
 
 let authState: AuthState = {
   accessToken: localStorage.getItem('access_token'),
-  user: JSON.parse(localStorage.getItem('user') || 'null')
+  user: JSON.parse(localStorage.getItem('user') || 'null'),
+  offlineMode: localStorage.getItem('offline_mode') === 'true'
 };
 
 // Função para recarregar authState do localStorage
 function refreshAuthState() {
   authState.accessToken = localStorage.getItem('access_token');
   authState.user = JSON.parse(localStorage.getItem('user') || 'null');
+  authState.offlineMode = localStorage.getItem('offline_mode') === 'true';
+}
+
+// Função para ativar modo offline
+function enableOfflineMode() {
+  console.warn('🔌 Ativando modo offline - backend não disponível');
+  authState.offlineMode = true;
+  localStorage.setItem('offline_mode', 'true');
+}
+
+// Função para desativar modo offline
+function disableOfflineMode() {
+  console.log('🌐 Desativando modo offline - backend disponível');
+  authState.offlineMode = false;
+  localStorage.setItem('offline_mode', 'false');
 }
 
 // Função auxiliar para fazer requisições
@@ -35,13 +52,17 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
   // Adicionar token se estiver autenticado
   if (authState.accessToken) {
     headers['Authorization'] = `Bearer ${authState.accessToken}`;
-    console.log('🔑 Usando access_token para autenticação');
+    console.log('🔑 [API REQUEST] Usando access_token para autenticação');
   } else {
     headers['Authorization'] = `Bearer ${publicAnonKey}`;
-    console.log('🔓 Usando publicAnonKey para autenticação');
+    console.log('🔓 [API REQUEST] Usando publicAnonKey para autenticação');
   }
 
-  console.log('🌐 Requisição:', `${SERVER_URL}${endpoint}`);
+  console.log('🌐 [API REQUEST] Requisição:', `${SERVER_URL}${endpoint}`);
+  console.log('🌐 [API REQUEST] Método:', options.method || 'GET');
+  if (options.body) {
+    console.log('📤 [API REQUEST] Body:', options.body);
+  }
 
   try {
     const response = await fetch(`${SERVER_URL}${endpoint}`, {
@@ -49,18 +70,26 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
       headers,
     });
 
-    console.log('📡 Status da resposta:', response.status, response.statusText);
+    console.log('📡 [API REQUEST] Status da resposta:', response.status, response.statusText);
 
     // Verificar se a resposta é JSON
     const contentType = response.headers.get('content-type');
     if (!contentType || !contentType.includes('application/json')) {
       const text = await response.text();
       console.error('❌ Resposta não é JSON:', text);
-      throw new Error(`Erro no servidor: resposta inválida (${response.status}). O servidor pode não estar rodando corretamente.`);
+      
+      // Ativar modo offline se o servidor não responder corretamente
+      enableOfflineMode();
+      throw new Error('BACKEND_UNAVAILABLE');
     }
 
     const data = await response.json();
     console.log('📥 Dados recebidos:', data);
+
+    // Se chegou até aqui, o backend está funcionando
+    if (authState.offlineMode) {
+      disableOfflineMode();
+    }
 
     // Verificar se é erro de autenticação (token inválido/expirado)
     // IMPORTANTE: Não tratar como erro de sessão se for uma requisição de login
@@ -77,7 +106,7 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
       localStorage.removeItem('user');
       
       // Não forçar reload, deixar o componente tratar
-      throw new Error('Sessão expirada. Por favor, faça login novamente.');
+      throw new Error('SESSION_EXPIRED');
     }
 
     if (!response.ok) {
@@ -91,7 +120,18 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
     
     // Tratar erro de conexão
     if (error.message === 'Failed to fetch') {
-      throw new Error('Não foi possível conectar ao servidor. Verifique se a Edge Function está ativa.');
+      enableOfflineMode();
+      throw new Error('BACKEND_UNAVAILABLE');
+    }
+    
+    // Se for erro de backend indisponível, propagar
+    if (error.message === 'BACKEND_UNAVAILABLE') {
+      throw error;
+    }
+    
+    // Se for erro de sessão expirada, propagar sem modificar
+    if (error.message === 'SESSION_EXPIRED') {
+      throw new Error('Sessão expirada. Por favor, faça login novamente.');
     }
     
     throw error;
@@ -223,11 +263,17 @@ export const contratos = {
   },
 
   async create(contratoData: any) {
-    console.log('➕ Criando novo contrato...');
-    return await apiRequest('/contratos', {
+    console.log('➕ [API] Criando novo contrato...');
+    console.log('📝 [API] Dados do contrato:', contratoData);
+    console.log('📤 [API] JSON a ser enviado:', JSON.stringify(contratoData));
+    
+    const result = await apiRequest('/contratos', {
       method: 'POST',
       body: JSON.stringify(contratoData),
     });
+    
+    console.log('📥 [API] Resultado da criação:', result);
+    return result;
   },
 
   async update(id: string, contratoData: any) {

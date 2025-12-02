@@ -662,15 +662,260 @@ window.corrigirLoginRapido = async (email, novaSenha = 'SenhaTemp123') => {
 
 globalThis.corrigirLoginRapido = window.corrigirLoginRapido;
 
+// Função para resetar dados mock no localStorage
+window.resetarDadosMock = () => {
+  console.log('');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🔄 RESETAR DADOS MOCK (MODO OFFLINE)');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('');
+  
+  try {
+    // Limpar dados mock antigos
+    console.log('🗑️ Limpando dados antigos do localStorage...');
+    localStorage.removeItem('mock_users');
+    localStorage.removeItem('mock_contratos');
+    localStorage.removeItem('mock_secretarias');
+    localStorage.removeItem('mock_solicitacoes');
+    localStorage.removeItem('mock_alertas');
+    
+    console.log('✅ Dados antigos removidos!');
+    console.log('');
+    console.log('📋 USUÁRIO ADMINISTRADOR (MODO OFFLINE):');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('   👤 Nome: Gustavo Barros');
+    console.log('   📧 Email: controleinterno@jardim.ce.gov.br');
+    console.log('   🔑 Senha: @Gustavo25');
+    console.log('   🏢 Secretaria: CGM - Controladoria Geral');
+    console.log('   👔 Perfil: Administrador CGM');
+    console.log('');
+    console.log('✅ SUCESSO! Dados mock resetados!');
+    console.log('');
+    console.log('🔄 PRÓXIMO PASSO:');
+    console.log('   Recarregue a página (F5) para aplicar as mudanças!');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+    
+    return { success: true, message: 'Dados mock resetados com sucesso' };
+  } catch (error) {
+    console.error('❌ Erro ao resetar dados mock:', error.message);
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    throw error;
+  }
+};
+
+globalThis.resetarDadosMock = window.resetarDadosMock;
+
+// Função para excluir todos os usuários exceto Gustavo Barros (Supabase Auth)
+window.limparUsuariosSupabase = async () => {
+  console.log('');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🗑️ LIMPAR TODOS OS USUÁRIOS (SUPABASE AUTH)');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('');
+  console.log('⚠️ ATENÇÃO: Esta ação irá excluir TODOS os usuários,');
+  console.log('   exceto o administrador Gustavo Barros!');
+  console.log('');
+  
+  try {
+    // Listar todos os usuários primeiro
+    console.log('📋 Listando usuários atuais...');
+    const listResult = await apiRequest('/debug/list-auth-users', {
+      method: 'GET',
+    });
+    
+    if (!listResult.success || !listResult.users) {
+      console.error('❌ Erro ao listar usuários');
+      return;
+    }
+    
+    console.log(`📊 Total de usuários encontrados: ${listResult.users.length}`);
+    console.log('');
+    
+    const gustavoEmail = 'controleinterno@jardim.ce.gov.br';
+    const usersToDelete = listResult.users.filter(u => u.email !== gustavoEmail);
+    
+    console.log(`🗑️ Usuários que serão excluídos: ${usersToDelete.length}`);
+    console.log(`✅ Usuários que serão mantidos: 1 (${gustavoEmail})`);
+    console.log('');
+    
+    if (usersToDelete.length === 0) {
+      console.log('✅ Nenhum usuário para excluir!');
+      console.log('   Apenas o Gustavo Barros existe no sistema.');
+      console.log('');
+      console.log('═══════════════════════════════════════════════════════════');
+      return { success: true, message: 'Sistema já está limpo' };
+    }
+    
+    // Excluir usuários
+    console.log('🗑️ Iniciando exclusão de usuários...');
+    console.log('');
+    
+    for (const user of usersToDelete) {
+      console.log(`   🗑️ Excluindo: ${user.email}...`);
+      
+      try {
+        const deleteResult = await apiRequest('/debug/delete-user', {
+          method: 'POST',
+          body: JSON.stringify({ userId: user.id }),
+        });
+        
+        if (deleteResult.success) {
+          console.log(`   ✅ Excluído: ${user.email}`);
+        } else {
+          console.warn(`   ⚠️ Erro ao excluir ${user.email}: ${deleteResult.error}`);
+        }
+      } catch (error) {
+        console.error(`   ❌ Erro ao excluir ${user.email}:`, error.message);
+      }
+    }
+    
+    console.log('');
+    console.log('✅ LIMPEZA CONCLUÍDA!');
+    console.log('');
+    console.log('📋 USUÁRIO MANTIDO:');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('   👤 Nome: Gustavo Barros');
+    console.log('   📧 Email: controleinterno@jardim.ce.gov.br');
+    console.log('   🔑 Senha: @Gustavo25');
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+    
+    return { success: true, message: 'Usuários excluídos com sucesso' };
+  } catch (error) {
+    console.error('❌ Erro ao limpar usuários:', error.message);
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    throw error;
+  }
+};
+
+globalThis.limparUsuariosSupabase = window.limparUsuariosSupabase;
+
+// Função para limpar dados mock (localStorage) mantendo apenas Gustavo Barros
+window.limparUsuariosMock = () => {
+  console.log('');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🗑️ LIMPAR USUÁRIOS MOCK (LOCALSTORAGE)');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('');
+  
+  try {
+    // Dados do Gustavo Barros
+    const gustavoBarros = {
+      id: 'admin-001',
+      email: 'controleinterno@jardim.ce.gov.br',
+      nome: 'Gustavo Barros',
+      perfil: 'admin',
+      secretaria: 'CGM - Controladoria Geral do Município',
+      situacao: 'ativo',
+      criadoEm: '2024-01-15T10:00:00Z',
+      ultimoAcesso: new Date().toISOString()
+    };
+    
+    // Salvar apenas Gustavo Barros
+    localStorage.setItem('mock_users', JSON.stringify([gustavoBarros]));
+    
+    // Limpar outros dados
+    localStorage.removeItem('mock_solicitacoes');
+    
+    console.log('✅ LIMPEZA CONCLUÍDA!');
+    console.log('');
+    console.log('📋 USUÁRIO MANTIDO (MODO OFFLINE):');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('   👤 Nome: Gustavo Barros');
+    console.log('   📧 Email: controleinterno@jardim.ce.gov.br');
+    console.log('   🔑 Senha: @Gustavo25');
+    console.log('   🏢 Secretaria: CGM - Controladoria Geral');
+    console.log('');
+    console.log('🔄 Recarregue a página (F5) para aplicar as mudanças!');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+    
+    return { success: true, message: 'Usuários mock limpos com sucesso' };
+  } catch (error) {
+    console.error('❌ Erro ao limpar usuários mock:', error.message);
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    throw error;
+  }
+};
+
+globalThis.limparUsuariosMock = window.limparUsuariosMock;
+
+// Função para limpar TUDO (Supabase + Mock) mantendo apenas Gustavo Barros
+window.limparTodosUsuarios = async () => {
+  console.log('');
+  console.log('╔═══════════════════════════════════════════════════════════╗');
+  console.log('║     🗑️ LIMPEZA COMPLETA - TODOS OS USUÁRIOS             ║');
+  console.log('╚═══════════════════════════════════════════════════════════╝');
+  console.log('');
+  console.log('⚠️ ATENÇÃO: Esta ação irá:');
+  console.log('   • Excluir todos os usuários do Supabase Auth');
+  console.log('   • Limpar todos os usuários mock do localStorage');
+  console.log('   • Manter APENAS o Gustavo Barros');
+  console.log('');
+  
+  try {
+    // Limpar Supabase
+    console.log('1️⃣ Limpando usuários do Supabase Auth...');
+    console.log('');
+    await limparUsuariosSupabase();
+    
+    console.log('');
+    console.log('2️⃣ Limpando usuários mock do localStorage...');
+    console.log('');
+    limparUsuariosMock();
+    
+    console.log('');
+    console.log('╔═══════════════════════════════════════════════════════════╗');
+    console.log('║              ✅ LIMPEZA COMPLETA FINALIZADA!             ║');
+    console.log('╚═══════════════════════════════════════════════════════════╝');
+    console.log('');
+    console.log('📋 ÚNICO USUÁRIO NO SISTEMA:');
+    console.log('');
+    console.log('   👤 Nome: Gustavo Barros');
+    console.log('   📧 Email: controleinterno@jardim.ce.gov.br');
+    console.log('   🔑 Senha: @Gustavo25');
+    console.log('   🏢 Secretaria: CGM - Controladoria Geral');
+    console.log('   👔 Perfil: Administrador CGM');
+    console.log('');
+    console.log('🔄 Recarregue a página (F5) para aplicar todas as mudanças!');
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+    
+    return { success: true, message: 'Todos os usuários foram limpos com sucesso' };
+  } catch (error) {
+    console.error('❌ Erro durante limpeza completa:', error.message);
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    throw error;
+  }
+};
+
+globalThis.limparTodosUsuarios = window.limparTodosUsuarios;
+
 // Log de inicialização
 console.log('');
-console.log('═══════════════════════════════════════════════════════════');
-console.log('🛠️  UTILITÁRIO DE SETUP - ContratosJardim');
-console.log('═══════════════════════════════════════════════════════════');
+console.log('╔═══════════════════════════════════════════════════════════╗');
+console.log('║     🛠️  UTILITÁRIO DE SETUP - ContratosJardim           ║');
+console.log('╚═══════════════════════════════════════════════════════════╝');
 console.log('');
-console.log('Para criar o usuário administrador, execute no console:');
+console.log('📋 FUNÇÕES PRINCIPAIS:');
 console.log('');
-console.log('   setupAdmin()');
+console.log('   🔧 setupAdmin()                - Criar administrador no Supabase');
+console.log('   🔄 resetarDadosMock()          - Resetar dados mock (offline)');
+console.log('   🗑️ limparTodosUsuarios()       - Excluir todos exceto Gustavo');
+console.log('');
+console.log('📋 FUNÇÕES DE DIAGNÓSTICO:');
+console.log('');
+console.log('   🔍 listarUsuariosAuth()        - Listar todos os usuários');
+console.log('   🔍 verificarUsuario(email)     - Verificar usuário específico');
+console.log('   🔧 corrigirUsuario(email, senha) - Corrigir problemas de login');
+console.log('   🔑 resetarSenha(email, senha)  - Resetar senha de usuário');
 console.log('');
 console.log('═══════════════════════════════════════════════════════════');
 console.log('');

@@ -3,7 +3,7 @@ import { User, Contrato, Alerta, AcaoRecente } from '../types';
 export const mockUsers: User[] = [
   {
     id: '1',
-    nome: 'Administrador CGM',
+    nome: 'Gustavo Barros',
     email: 'controleinterno@jardim.ce.gov.br',
     perfil: 'admin',
     secretaria: 'CGM - Controladoria Geral',

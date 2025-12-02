@@ -6,26 +6,17 @@ import { MOCK_CONTRATOS, MOCK_ALERTAS } from '../utils/mockData';
 import { useSecretarias } from '../hooks/useSecretarias';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
+import { calcularDiasRestantes, getSituacaoAtual, PARAMETROS_ALERTA } from '../utils/contratoUtils';
 
 interface DashboardProps {
   onNavigate: (page: string) => void;
 }
 
-// Função auxiliar para calcular dias até o vencimento
-const calcularDiasRestantes = (dataFinal: string): number => {
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const vencimento = new Date(dataFinal);
-  vencimento.setHours(0, 0, 0, 0);
-  const diff = vencimento.getTime() - hoje.getTime();
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
-};
-
-// Função auxiliar para obter o status do contrato
+// Função auxiliar para obter o status do contrato usando os parâmetros de alerta
 const getStatusContrato = (dataFinal: string) => {
   const diasRestantes = calcularDiasRestantes(dataFinal);
   if (diasRestantes < 0) return 'vencido';
-  if (diasRestantes <= 90) return 'alerta';
+  if (diasRestantes <= PARAMETROS_ALERTA.diasAlertaMaximo) return 'alerta';
   return 'vigente';
 };
 
@@ -57,6 +48,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           contratosAPI.getAll().catch(err => {
             console.warn('⚠️ Erro ao buscar contratos:', err);
             
+            // Se for erro de backend indisponível, usar dados mock
+            if (err.message === 'BACKEND_UNAVAILABLE') {
+              console.warn('⚠️ Backend indisponível, usando dados mock para contratos');
+              return { success: true, contratos: MOCK_CONTRATOS };
+            }
+            
             // Se for erro de autenticação, propagar o erro
             if (err.message?.includes('expirada') || err.message?.includes('Sessão')) {
               throw err;
@@ -67,6 +64,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           }),
           alertasAPI.getAll().catch(err => {
             console.warn('⚠️ Erro ao buscar alertas:', err);
+            
+            // Se for erro de backend indisponível, usar dados mock
+            if (err.message === 'BACKEND_UNAVAILABLE') {
+              console.warn('⚠️ Backend indisponível, usando dados mock para alertas');
+              return { success: true, alertas: MOCK_ALERTAS };
+            }
             
             // Se for erro de autenticação, propagar o erro
             if (err.message?.includes('expirada') || err.message?.includes('Sessão')) {
@@ -86,6 +89,14 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         setAlertas(alertasData);
       } catch (err: any) {
         console.error('❌ Erro ao carregar dados do Dashboard:', err);
+        
+        // Se for erro de backend indisponível, usar dados mock
+        if (err.message === 'BACKEND_UNAVAILABLE') {
+          console.warn('⚠️ Backend indisponível, usando dados mock');
+          setContratos(MOCK_CONTRATOS);
+          setAlertas(MOCK_ALERTAS);
+          return;
+        }
         
         // Se for erro de autenticação, apenas usar dados vazios
         // O AuthProvider vai redirecionar automaticamente
@@ -124,19 +135,19 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const temContratos = contratos.length > 0;
 
   // Calcular métricas reais baseadas nos contratos
-  const contratosVigentes = contratos.filter(c => getStatusContrato(c.dataFinal) === 'vigente');
-  const contratosEmAlerta = contratos.filter(c => getStatusContrato(c.dataFinal) === 'alerta');
-  const contratosVencidos = contratos.filter(c => getStatusContrato(c.dataFinal) === 'vencido');
+  const contratosVigentes = contratos.filter(c => c.dataFim && getStatusContrato(c.dataFim) === 'vigente');
+  const contratosEmAlerta = contratos.filter(c => c.dataFim && getStatusContrato(c.dataFim) === 'alerta');
+  const contratosVencidos = contratos.filter(c => c.dataFim && getStatusContrato(c.dataFim) === 'vencido');
   const alertasPendentes = alertas.filter(a => a.status === 'pendente' || !a.status);
 
   // Filtrar contratos próximos do vencimento para a tabela
   const contratosProximosVencimento = [...contratosEmAlerta]
-    .sort((a, b) => calcularDiasRestantes(a.dataFinal) - calcularDiasRestantes(b.dataFinal))
+    .sort((a, b) => calcularDiasRestantes(a.dataFim) - calcularDiasRestantes(b.dataFim))
     .slice(0, 4);
 
   // Filtrar contratos vencidos para a tabela
   const contratosVencidosLista = [...contratosVencidos]
-    .sort((a, b) => new Date(a.dataFinal).getTime() - new Date(b.dataFinal).getTime())
+    .sort((a, b) => new Date(a.dataFim).getTime() - new Date(b.dataFim).getTime())
     .slice(0, 3);
 
   // Calcular dados para o gráfico de linha do tempo (últimos 6 meses)
@@ -152,57 +163,36 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       const mesNome = meses[mesInicio.getMonth()];
       
       // Contar contratos que vão vencer neste mês
-      const contratosDoMes = contratos.filter(contrato => {
-        const dataVencimento = new Date(contrato.dataFinal);
+      const contratosVencemEsteMes = contratos.filter(contrato => {
+        const dataVencimento = new Date(contrato.dataFim);
         return dataVencimento >= mesInicio && dataVencimento <= mesFim;
-      });
-
-      // Calcular status dos contratos neste mês
-      let vigentesCount = 0;
-      let alertaCount = 0;
-      let vencidosCount = 0;
-
-      contratosDoMes.forEach(contrato => {
-        const diasRestantes = calcularDiasRestantes(contrato.dataFinal);
-        if (diasRestantes < 0) {
-          vencidosCount++;
-        } else if (diasRestantes <= 30) {
-          alertaCount++;
-        } else {
-          vigentesCount++;
-        }
-      });
-
-      // Adicionar contratos que ainda estarão vigentes (não vencem neste mês)
-      const contratosVigentesAposEsteMes = contratos.filter(contrato => {
-        const dataVencimento = new Date(contrato.dataFinal);
-        return dataVencimento > mesFim;
       }).length;
 
       timelineData.push({
         mes: mesNome,
-        vigentes: vigentesCount + contratosVigentesAposEsteMes,
-        emAlerta: alertaCount,
-        vencidos: vencidosCount
+        vencimentos: contratosVencemEsteMes
       });
     }
 
     return timelineData;
   };
 
-  // Calcular dados para distribuição por mês de vencimento
+  // Calcular dados para distribuição por mês de vencimento (ano inteiro)
   const calcularDistribuicaoData = () => {
     const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const anoAtual = new Date().getFullYear();
     const distribuicao: { [key: string]: number } = {};
     
     // Inicializar todos os meses com 0
     meses.forEach(mes => distribuicao[mes] = 0);
 
-    // Contar contratos por mês de vencimento
+    // Contar contratos que vencem em cada mês do ano atual
     contratos.forEach(contrato => {
-      const dataFinal = new Date(contrato.dataFinal);
-      const mes = meses[dataFinal.getMonth()];
-      distribuicao[mes]++;
+      const dataFinal = new Date(contrato.dataFim);
+      if (dataFinal.getFullYear() === anoAtual) {
+        const mes = meses[dataFinal.getMonth()];
+        distribuicao[mes]++;
+      }
     });
 
     return meses.map(mes => ({
@@ -236,7 +226,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
       .map(([nome, quantidade]) => ({
         nome,
         quantidade,
-        diasAtraso: Math.abs(calcularDiasRestantes(contratosVencidos.find(c => c.secretaria === nome)?.dataFinal || ''))
+        diasAtraso: Math.abs(calcularDiasRestantes(contratosVencidos.find(c => c.secretaria === nome)?.dataFim || ''))
       }))
       .sort((a, b) => b.diasAtraso - a.diasAtraso)
       .slice(0, 3);
@@ -254,7 +244,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         gestoresMap[gestor] = { vencidos: 0, emAlerta: 0, secretaria };
       }
       
-      if (getStatusContrato(contrato.dataFinal) === 'vencido') {
+      if (getStatusContrato(contrato.dataFim) === 'vencido') {
         gestoresMap[gestor].vencidos++;
       } else {
         gestoresMap[gestor].emAlerta++;
@@ -277,6 +267,28 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const contratosVencidosSemAcao = contratosVencidos.length;
   const contratosAlertaSemAcao = contratosEmAlerta.length;
   const secretariasComPendencias = new Set([...contratosVencidos, ...contratosEmAlerta].map(c => c.secretaria)).size;
+
+  // Calcular contratos adicionados este mês
+  const calcularContratosEsteMes = () => {
+    const hoje = new Date();
+    const inicioDoMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    
+    return contratos.filter(contrato => {
+      const dataCriacao = contrato.criadoEm ? new Date(contrato.criadoEm) : null;
+      return dataCriacao && dataCriacao >= inicioDoMes;
+    }).length;
+  };
+
+  // Calcular contratos vencidos sem ação registrada
+  const calcularVencidosSemAcao = () => {
+    return contratosVencidos.filter(contrato => {
+      // Verificar se não há ações registradas ou campo está vazio
+      return !contrato.acoes || contrato.acoes.length === 0;
+    }).length;
+  };
+
+  const contratosEsteMes = calcularContratosEsteMes();
+  const vencidosSemAcao = calcularVencidosSemAcao();
 
   // Se não há contratos, mostrar estado vazio
   if (!temContratos) {
@@ -407,7 +419,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
           <div className="mb-1">
             <span className="text-[#102a43] text-3xl font-medium">{contratosVigentes.length}</span>
-            <span className="text-gray-500 text-sm ml-2">+4 este mês</span>
+            {contratosEsteMes > 0 && (
+              <span className="text-gray-500 text-sm ml-2">+{contratosEsteMes} este mês</span>
+            )}
           </div>
           <p className="text-gray-500 text-xs">
             Inclui contratos com prazo acima da faixa de alerta.
@@ -437,7 +451,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </div>
           <div className="mb-1">
             <span className="text-[#102a43] text-3xl font-medium">{contratosVencidos.length}</span>
-            <span className="text-gray-500 text-sm ml-2">3 sem ação registrada</span>
+            {vencidosSemAcao > 0 && (
+              <span className="text-gray-500 text-sm ml-2">{vencidosSemAcao} sem ação registrada</span>
+            )}
           </div>
           <p className="text-gray-500 text-xs">
             Exigem registro de providências pela CGM ou gestor.
@@ -493,26 +509,10 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               />
               <Line 
                 type="monotone" 
-                dataKey="vigentes" 
-                stroke="#10b981" 
-                strokeWidth={2}
-                name="Vigentes"
-                dot={{ fill: '#10b981', r: 4 }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="emAlerta" 
-                stroke="#f59e0b" 
-                strokeWidth={2}
-                name="Em faixa de alerta"
-                dot={{ fill: '#f59e0b', r: 4 }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="vencidos" 
+                dataKey="vencimentos" 
                 stroke="#ef4444" 
                 strokeWidth={2}
-                name="Vencidos"
+                name="Vencimentos"
                 dot={{ fill: '#ef4444', r: 4 }}
               />
             </LineChart>
@@ -664,7 +664,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                     <td className="px-4 py-3 text-xs text-gray-700">{contrato.secretaria}</td>
                     <td className="px-4 py-3 text-xs text-gray-700">{contrato.contratado}</td>
                     <td className="px-4 py-3 text-xs text-gray-700">{contrato.objeto}</td>
-                    <td className="px-4 py-3 text-xs text-gray-700">{formatarData(contrato.dataFinal)}</td>
+                    <td className="px-4 py-3 text-xs text-gray-700">{formatarData(contrato.dataFim)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -705,7 +705,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   <tr key={index} className="border-t border-gray-200">
                     <td className="px-4 py-3 text-xs text-gray-700">{contrato.secretaria}</td>
                     <td className="px-4 py-3 text-xs text-gray-700">{contrato.contratado}</td>
-                    <td className="px-4 py-3 text-xs text-gray-700">{formatarData(contrato.dataFinal)}</td>
+                    <td className="px-4 py-3 text-xs text-gray-700">{formatarData(contrato.dataFim)}</td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">
                         Sem providência

@@ -43,21 +43,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  // Verificar periodicamente se a sessão ainda é válida (a cada 5 segundos)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Apenas verificar se há um usuário logado
-      if (user) {
-        const isValid = checkSession();
-        if (!isValid) {
-          console.warn('⚠️ Sessão expirou, fazendo logout...');
-          logout();
-        }
-      }
-    }, 5000); // 5 segundos
-
-    return () => clearInterval(interval);
-  }, [user]);
+  // REMOVIDO: Verificação periódica de sessão que causava loops infinitos
+  // A sessão agora é verificada apenas quando necessário (nas chamadas à API)
 
   const login = async (email: string, senha: string): Promise<boolean> => {
     try {

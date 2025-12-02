@@ -786,6 +786,55 @@ app.post("/make-server-1a8b02da/debug/fix-all-users", async (c) => {
   }
 });
 
+app.post("/make-server-1a8b02da/debug/delete-user", async (c) => {
+  try {
+    const { userId } = await c.req.json();
+    
+    if (!userId) {
+      return c.json({ error: "userId é obrigatório" }, 400);
+    }
+    
+    console.log(`🗑️ [DEBUG] Excluindo usuário: ${userId}`);
+    
+    // Buscar informações do usuário antes de excluir
+    const { data: userData } = await supabase.auth.admin.getUserById(userId);
+    const userEmail = userData?.user?.email || 'desconhecido';
+    
+    console.log(`   Email: ${userEmail}`);
+    console.log(`   ID: ${userId}`);
+    
+    // Excluir do Supabase Auth
+    const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
+    
+    if (deleteError) {
+      console.error(`❌ [DEBUG] Erro ao excluir do Auth: ${deleteError.message}`);
+      return c.json({ error: `Erro ao excluir usuário: ${deleteError.message}` }, 500);
+    }
+    
+    console.log(`✅ [DEBUG] Usuário excluído do Supabase Auth`);
+    
+    // Excluir do KV Store
+    try {
+      await kv.del(`user:${userId}`);
+      console.log(`✅ [DEBUG] Usuário excluído do KV Store`);
+    } catch (kvError) {
+      console.warn(`⚠️ [DEBUG] Erro ao excluir do KV: ${kvError.message}`);
+    }
+    
+    console.log(`🎉 [DEBUG] Usuário ${userEmail} excluído com sucesso!`);
+    
+    return c.json({
+      success: true,
+      message: `Usuário ${userEmail} excluído com sucesso`,
+      userId,
+      email: userEmail
+    });
+  } catch (error) {
+    console.error('❌ [DEBUG] Erro ao excluir usuário:', error.message);
+    return c.json({ error: `Erro: ${error.message}` }, 500);
+  }
+});
+
 app.post("/make-server-1a8b02da/debug/change-profile", async (c) => {
   try {
     const { email, novoPerfil } = await c.req.json();
