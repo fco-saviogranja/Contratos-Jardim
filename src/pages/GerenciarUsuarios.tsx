@@ -96,7 +96,13 @@ export function GerenciarUsuarios() {
       }
     } catch (error: any) {
       console.error('❌ Erro ao carregar solicitações:', error);
-      toast.error('Erro ao carregar solicitações: ' + error.message);
+      // NÃO mostrar erro se for "Acesso negado" - isso é esperado para não-admins
+      if (!error.message?.includes('Acesso negado')) {
+        toast.error('Erro ao carregar solicitações: ' + error.message);
+      } else {
+        // Apenas log para debug, sem toast para não incomodar o usuário
+        console.log('ℹ️ Solicitações não disponíveis: usuário sem permissão de admin');
+      }
     } finally {
       setLoading(false);
     }

@@ -22,7 +22,7 @@ export function useGestores() {
           return;
         }
         
-        const url = `https://${projectId}.supabase.co/functions/v1/make-server-1a8b02da/usuarios`;
+        const url = `https://${projectId}.supabase.co/functions/v1/hello-world/usuarios`;
         console.log('🌐 [GESTORES] URL:', url);
         
         const response = await fetch(url, {

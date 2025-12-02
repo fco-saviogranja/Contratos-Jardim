@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, senha: string): Promise<boolean> => {
     try {
-      console.log('Tentando login com backend Supabase...');
+      console.log('🌐 Tentando login com backend Supabase (MODO ONLINE)...');
       
       // Limpar qualquer sessão antiga antes de fazer login
       auth.logout();

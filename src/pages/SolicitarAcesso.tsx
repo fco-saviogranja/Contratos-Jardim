@@ -47,6 +47,18 @@ export function SolicitarAcesso() {
       return;
     }
 
+    // 🔧 VERIFICAR SE É O EMAIL DO ADMINISTRADOR
+    if (formData.email === 'controleinterno@jardim.ce.gov.br') {
+      setError('❌ Este é o e-mail do administrador do sistema.\n\n' +
+        '💡 Solução:\n' +
+        '1. Volte para a tela de login\n' +
+        '2. Use o e-mail: controleinterno@jardim.ce.gov.br\n' +
+        '3. Use a senha: @Gustavo25\n\n' +
+        '✅ O acesso de administrador já está configurado!');
+      setLoading(false);
+      return;
+    }
+
     try {
       console.log('📤 Enviando solicitação de acesso...');
       console.log('📋 Dados do formulário:', {
@@ -85,7 +97,10 @@ export function SolicitarAcesso() {
           '💡 Possíveis soluções:\n' +
           '1. Faça login usando este e-mail na tela de login\n' +
           '2. Se esqueceu sua senha, entre em contato com o administrador\n' +
-          '3. Use outro e-mail institucional para solicitar acesso';
+          '3. Use outro e-mail institucional para solicitar acesso\n\n' +
+          '🔧 Se o problema persistir:\n' +
+          '• Tente fazer login diretamente na tela inicial\n' +
+          '• O sistema pode já ter criado sua conta automaticamente';
       }
       // Verificar se é erro de conexão
       else if (err.message && err.message.includes('Failed to fetch')) {

@@ -1,0 +1,10 @@
+# Configuração do Supabase
+# Este arquivo configura as Edge Functions
+
+[functions]
+# Habilitar Edge Functions
+enabled = true
+
+[functions.server]
+# Verificação JWT desabilitada (controlada pelo config.json)
+verify_jwt = false

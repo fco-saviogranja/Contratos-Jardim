@@ -22,7 +22,7 @@ export function useSecretarias() {
           return;
         }
         
-        const url = `https://${projectId}.supabase.co/functions/v1/make-server-1a8b02da/secretarias`;
+        const url = `https://${projectId}.supabase.co/functions/v1/hello-world/secretarias`;
         console.log('🌐 [SECRETARIAS] URL:', url);
         
         const response = await fetch(url, {

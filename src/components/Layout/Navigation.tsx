@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Home, FileText, FolderOpen, Bell, BarChart3, Users, Settings, Layout, Sliders, ChevronDown } from 'lucide-react';
+import { Home, FileText, FolderOpen, Bell, BarChart3, Users, Settings, Layout, Sliders, ChevronDown, Building2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { alertas as alertasAPI } from '../../utils/api';
 
@@ -90,6 +90,7 @@ export function Navigation({ currentPage, onNavigate }: NavigationProps) {
     
     switch (itemId) {
       case 'usuarios':
+      case 'secretarias':
       case 'parametros':
       case 'aparencia':
       case 'configuracoes':
@@ -111,6 +112,7 @@ export function Navigation({ currentPage, onNavigate }: NavigationProps) {
 
   const adminItems = useMemo(() => [
     { id: 'usuarios', label: 'Gerenciar usuários', icon: Users },
+    { id: 'secretarias', label: 'Gerenciar secretarias', icon: Building2 },
     { id: 'parametros', label: 'Parâmetros e perfis', icon: Settings },
     { id: 'aparencia', label: 'Aparência e layout', icon: Layout },
     { id: 'configuracoes', label: 'Configurações gerais', icon: Sliders }

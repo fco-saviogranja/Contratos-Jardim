@@ -8,12 +8,31 @@ const app = new Hono();
 app.use("/*", cors({ origin: "*", allowHeaders: ["Content-Type", "Authorization"], allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], exposeHeaders: ["Content-Length"], maxAge: 600 }));
 app.use('*', logger(console.log));
 
+// Middleware de debug para todas as requisições
+app.use('*', async (c, next) => {
+  console.log('');
+  console.log('🔵 REQUISIÇÃO RECEBIDA:', {
+    method: c.req.method,
+    path: c.req.path,
+    url: c.req.url,
+    headers: Object.fromEntries(c.req.raw.headers.entries())
+  });
+  await next();
+  console.log('🟢 RESPOSTA ENVIADA:', c.res.status);
+});
+
 // Validação de variáveis de ambiente
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('❌ ERRO CRÍTICO: Variáveis de ambiente SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configuradas!');
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_ANON_KEY) {
+  console.error('❌ ERRO CRÍTICO: Variáveis de ambiente SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY ou SUPABASE_ANON_KEY não configuradas!');
+  console.error('Valores recebidos:', { 
+    SUPABASE_URL: SUPABASE_URL ? 'OK' : 'MISSING',
+    SUPABASE_SERVICE_ROLE_KEY: SUPABASE_SERVICE_ROLE_KEY ? 'OK' : 'MISSING',
+    SUPABASE_ANON_KEY: SUPABASE_ANON_KEY ? 'OK' : 'MISSING'
+  });
 }
 
 const supabase = createClient(SUPABASE_URL ?? '', SUPABASE_SERVICE_ROLE_KEY ?? '');
@@ -33,13 +52,13 @@ const isValidEmail = (email: string): boolean => {
 };
 
 // Health check
-app.get("/make-server-1a8b02da/health", (c) => c.json({ status: "ok", timestamp: new Date().toISOString() }));
+app.get("/hello-world/health", (c) => c.json({ status: "ok", timestamp: new Date().toISOString() }));
 
 // ========================================
 // AUTENTICAÇÃO
 // ========================================
 
-app.post("/make-server-1a8b02da/auth/setup-admin", async (c) => {
+app.post("/hello-world/auth/setup-admin", async (c) => {
   try {
     console.log('🔧 [SETUP] Iniciando configuração do administrador...');
     const e = 'controleinterno@jardim.ce.gov.br', p = '@Gustavo25';
@@ -117,7 +136,7 @@ app.post("/make-server-1a8b02da/auth/setup-admin", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/auth/signup", async (c) => {
+app.post("/hello-world/auth/signup", async (c) => {
   try {
     const { email, password, nome, perfil, secretaria } = await c.req.json();
     
@@ -175,7 +194,7 @@ app.post("/make-server-1a8b02da/auth/signup", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/auth/login", async (c) => {
+app.post("/hello-world/auth/login", async (c) => {
   try {
     const { email, password } = await c.req.json();
     
@@ -200,6 +219,19 @@ app.post("/make-server-1a8b02da/auth/login", async (c) => {
     
     if (!authUser) {
       console.warn(`⚠️ [LOGIN] Usuário não encontrado: ${email}`);
+      
+      // 🔍 VERIFICAR SE EXISTE SOLICITAÇÃO PENDENTE
+      const solicitacoesPendentes = await kv.getByPrefix("solicitacao:");
+      const solicitacaoPendente = solicitacoesPendentes.find(s => s.email === email && s.status === 'pendente');
+      
+      if (solicitacaoPendente) {
+        console.warn(`⏳ [LOGIN] Solicitação pendente encontrada para: ${email}`);
+        return c.json({ 
+          error: "Sua solicitação de cadastro ainda está pendente de aprovação pelo administrador. Aguarde a análise.",
+          hint: "Você receberá um e-mail quando sua solicitação for aprovada."
+        }, 401);
+      }
+      
       return c.json({ 
         error: "Credenciais inválidas. Verifique seu e-mail e senha.",
         hint: "Se você ainda não tem uma conta, execute o Setup Inicial ou solicite acesso."
@@ -210,7 +242,7 @@ app.post("/make-server-1a8b02da/auth/login", async (c) => {
     // Criar um cliente temporário SEM o service role key para testar as credenciais
     const testClient = createClient(
       SUPABASE_URL ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      SUPABASE_ANON_KEY ?? ''
     );
     
     const { data, error } = await testClient.auth.signInWithPassword({ email, password });
@@ -283,7 +315,7 @@ app.post("/make-server-1a8b02da/auth/login", async (c) => {
 // SOLICITAÇÕES DE CADASTRO
 // ========================================
 
-app.post("/make-server-1a8b02da/solicitar-cadastro", async (c) => {
+app.post("/hello-world/solicitar-cadastro", async (c) => {
   try {
     const { nome, email, cargo, setor, senha, confirmarSenha, justificativa } = await c.req.json();
     
@@ -348,7 +380,7 @@ app.post("/make-server-1a8b02da/solicitar-cadastro", async (c) => {
   }
 });
 
-app.get("/make-server-1a8b02da/solicitacoes", async (c) => {
+app.get("/hello-world/solicitacoes", async (c) => {
   try {
     const u = await auth(c);
     if (!u) {
@@ -377,7 +409,7 @@ app.get("/make-server-1a8b02da/solicitacoes", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/solicitacoes/:id/aprovar", async (c) => {
+app.post("/hello-world/solicitacoes/:id/aprovar", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -455,7 +487,7 @@ app.post("/make-server-1a8b02da/solicitacoes/:id/aprovar", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/solicitacoes/:id/rejeitar", async (c) => {
+app.post("/hello-world/solicitacoes/:id/rejeitar", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -507,7 +539,7 @@ app.post("/make-server-1a8b02da/solicitacoes/:id/rejeitar", async (c) => {
 // DEBUG (Rotas de utilidade para diagnóstico)
 // ========================================
 
-app.get("/make-server-1a8b02da/debug/list-auth-users", async (c) => {
+app.get("/hello-world/debug/list-auth-users", async (c) => {
   try {
     console.log('🔍 [DEBUG] Listando usuários do Supabase Auth...');
     
@@ -536,7 +568,7 @@ app.get("/make-server-1a8b02da/debug/list-auth-users", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/debug/reset-password", async (c) => {
+app.post("/hello-world/debug/reset-password", async (c) => {
   try {
     const { email, novaSenha } = await c.req.json();
     
@@ -581,7 +613,7 @@ app.post("/make-server-1a8b02da/debug/reset-password", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/debug/check-user", async (c) => {
+app.post("/hello-world/debug/check-user", async (c) => {
   try {
     const { email } = await c.req.json();
     
@@ -618,7 +650,7 @@ app.post("/make-server-1a8b02da/debug/check-user", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/debug/fix-user", async (c) => {
+app.post("/hello-world/debug/fix-user", async (c) => {
   try {
     const { email, novaSenha } = await c.req.json();
     
@@ -698,7 +730,7 @@ app.post("/make-server-1a8b02da/debug/fix-user", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/debug/fix-all-users", async (c) => {
+app.post("/hello-world/debug/fix-all-users", async (c) => {
   try {
     console.log('🔧 [DEBUG] Corrigindo TODOS os usuários...');
     
@@ -786,7 +818,7 @@ app.post("/make-server-1a8b02da/debug/fix-all-users", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/debug/delete-user", async (c) => {
+app.post("/hello-world/debug/delete-user", async (c) => {
   try {
     const { userId } = await c.req.json();
     
@@ -835,7 +867,7 @@ app.post("/make-server-1a8b02da/debug/delete-user", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/debug/change-profile", async (c) => {
+app.post("/hello-world/debug/change-profile", async (c) => {
   try {
     const { email, novoPerfil } = await c.req.json();
     
@@ -892,7 +924,7 @@ app.post("/make-server-1a8b02da/debug/change-profile", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/debug/test-login", async (c) => {
+app.post("/hello-world/debug/test-login", async (c) => {
   try {
     const { email, password } = await c.req.json();
     
@@ -905,7 +937,7 @@ app.post("/make-server-1a8b02da/debug/test-login", async (c) => {
     // Criar um cliente temporário SEM o service role key para testar as credenciais
     const testClient = createClient(
       SUPABASE_URL ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      SUPABASE_ANON_KEY ?? ''
     );
     
     const { data, error } = await testClient.auth.signInWithPassword({ email, password });
@@ -939,7 +971,7 @@ app.post("/make-server-1a8b02da/debug/test-login", async (c) => {
 // CONTRATOS
 // ========================================
 
-app.get("/make-server-1a8b02da/contratos", async (c) => {
+app.get("/hello-world/contratos", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -953,7 +985,7 @@ app.get("/make-server-1a8b02da/contratos", async (c) => {
   }
 });
 
-app.get("/make-server-1a8b02da/contratos/:id", async (c) => {
+app.get("/hello-world/contratos/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -974,7 +1006,7 @@ app.get("/make-server-1a8b02da/contratos/:id", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/contratos", async (c) => {
+app.post("/hello-world/contratos", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -999,7 +1031,7 @@ app.post("/make-server-1a8b02da/contratos", async (c) => {
   }
 });
 
-app.put("/make-server-1a8b02da/contratos/:id", async (c) => {
+app.put("/hello-world/contratos/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1031,7 +1063,7 @@ app.put("/make-server-1a8b02da/contratos/:id", async (c) => {
   }
 });
 
-app.delete("/make-server-1a8b02da/contratos/:id", async (c) => {
+app.delete("/hello-world/contratos/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1055,7 +1087,7 @@ app.delete("/make-server-1a8b02da/contratos/:id", async (c) => {
 });
 
 // Deletar TODOS os contratos (apenas para admin)
-app.delete("/make-server-1a8b02da/contratos", async (c) => {
+app.delete("/hello-world/contratos", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1106,7 +1138,7 @@ app.delete("/make-server-1a8b02da/contratos", async (c) => {
 // USUÁRIOS
 // ========================================
 
-app.get("/make-server-1a8b02da/usuarios/me", async (c) => {
+app.get("/hello-world/usuarios/me", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1136,7 +1168,7 @@ app.get("/make-server-1a8b02da/usuarios/me", async (c) => {
   }
 });
 
-app.get("/make-server-1a8b02da/usuarios", async (c) => {
+app.get("/hello-world/usuarios", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1150,7 +1182,7 @@ app.get("/make-server-1a8b02da/usuarios", async (c) => {
   }
 });
 
-app.put("/make-server-1a8b02da/usuarios/:id", async (c) => {
+app.put("/hello-world/usuarios/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1182,7 +1214,7 @@ app.put("/make-server-1a8b02da/usuarios/:id", async (c) => {
 });
 
 // Deletar usuário
-app.delete("/make-server-1a8b02da/usuarios/:id", async (c) => {
+app.delete("/hello-world/usuarios/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1225,7 +1257,7 @@ app.delete("/make-server-1a8b02da/usuarios/:id", async (c) => {
 });
 
 // Atualizar perfil do próprio usuário
-app.put("/make-server-1a8b02da/usuarios/me/perfil", async (c) => {
+app.put("/hello-world/usuarios/me/perfil", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1300,7 +1332,7 @@ app.put("/make-server-1a8b02da/usuarios/me/perfil", async (c) => {
 });
 
 // Upload de foto de perfil
-app.post("/make-server-1a8b02da/usuarios/me/foto", async (c) => {
+app.post("/hello-world/usuarios/me/foto", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1380,7 +1412,7 @@ app.post("/make-server-1a8b02da/usuarios/me/foto", async (c) => {
 // SECRETARIAS
 // ========================================
 
-app.get("/make-server-1a8b02da/secretarias", async (c) => {
+app.get("/hello-world/secretarias", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1419,7 +1451,7 @@ app.get("/make-server-1a8b02da/secretarias", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/secretarias", async (c) => {
+app.post("/hello-world/secretarias", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1451,7 +1483,7 @@ app.post("/make-server-1a8b02da/secretarias", async (c) => {
   }
 });
 
-app.put("/make-server-1a8b02da/secretarias/:id", async (c) => {
+app.put("/hello-world/secretarias/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1482,7 +1514,7 @@ app.put("/make-server-1a8b02da/secretarias/:id", async (c) => {
   }
 });
 
-app.delete("/make-server-1a8b02da/secretarias/:id", async (c) => {
+app.delete("/hello-world/secretarias/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1509,7 +1541,7 @@ app.delete("/make-server-1a8b02da/secretarias/:id", async (c) => {
 // ALERTAS
 // ========================================
 
-app.get("/make-server-1a8b02da/alertas", async (c) => {
+app.get("/hello-world/alertas", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1523,7 +1555,7 @@ app.get("/make-server-1a8b02da/alertas", async (c) => {
   }
 });
 
-app.post("/make-server-1a8b02da/alertas", async (c) => {
+app.post("/hello-world/alertas", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1546,7 +1578,7 @@ app.post("/make-server-1a8b02da/alertas", async (c) => {
   }
 });
 
-app.put("/make-server-1a8b02da/alertas/:id", async (c) => {
+app.put("/hello-world/alertas/:id", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1581,7 +1613,7 @@ app.put("/make-server-1a8b02da/alertas/:id", async (c) => {
 // DASHBOARD
 // ========================================
 
-app.get("/make-server-1a8b02da/dashboard/stats", async (c) => {
+app.get("/hello-world/dashboard/stats", async (c) => {
   try {
     const u = await auth(c);
     if (!u) return c.json({ error: "Não autorizado" }, 401);
@@ -1614,7 +1646,7 @@ app.get("/make-server-1a8b02da/dashboard/stats", async (c) => {
 // LIMPEZA E REORGANIZAÇÃO DO SISTEMA
 // ========================================
 
-app.post("/make-server-1a8b02da/admin/limpar-usuarios", async (c) => {
+app.post("/hello-world/admin/limpar-usuarios", async (c) => {
   try {
     console.log('');
     console.log('═══════════════════════════════════════════════════════════');
@@ -1807,4 +1839,142 @@ app.post("/make-server-1a8b02da/admin/limpar-usuarios", async (c) => {
   }
 });
 
+// ========================================
+// LIMPAR TODOS OS DADOS
+// ========================================
+
+app.post("/hello-world/reset-all-data", async (c) => {
+  try {
+    console.log('🔥 [RESET] INICIANDO LIMPEZA TOTAL DO SISTEMA...');
+    console.log('═══════════════════════════════════════════════════════════');
+    
+    let totalDeletados = 0;
+    let erros = [];
+    
+    // 1. EXCLUIR TODOS OS CONTRATOS
+    console.log('📋 [RESET] Excluindo todos os contratos...');
+    const contratos = await kv.getByPrefix("contrato:");
+    console.log(`   Total de contratos: ${contratos.length}`);
+    
+    for (const contrato of contratos) {
+      try {
+        await kv.del(`contrato:${contrato.id}`);
+        totalDeletados++;
+        console.log(`   ✅ Contrato ${contrato.numeroContrato} excluído`);
+      } catch (error) {
+        console.error(`   ❌ Erro ao excluir contrato ${contrato.numeroContrato}:`, error.message);
+        erros.push({ tipo: 'contrato', id: contrato.id, erro: error.message });
+      }
+    }
+    
+    // 2. EXCLUIR TODOS OS USUÁRIOS (exceto do Supabase Auth)
+    console.log('👥 [RESET] Excluindo todos os usuários do KV Store...');
+    const usuarios = await kv.getByPrefix("user:");
+    console.log(`   Total de usuários no KV: ${usuarios.length}`);
+    
+    for (const usuario of usuarios) {
+      try {
+        await kv.del(`user:${usuario.id}`);
+        totalDeletados++;
+        console.log(`   ✅ Usuário ${usuario.email} excluído do KV`);
+      } catch (error) {
+        console.error(`   ❌ Erro ao excluir usuário ${usuario.email}:`, error.message);
+        erros.push({ tipo: 'usuario_kv', id: usuario.id, erro: error.message });
+      }
+    }
+    
+    // 3. EXCLUIR TODOS OS USUÁRIOS DO SUPABASE AUTH
+    console.log('🔐 [RESET] Excluindo todos os usuários do Supabase Auth...');
+    const { data: authUsers } = await supabase.auth.admin.listUsers();
+    console.log(`   Total de usuários no Auth: ${authUsers?.users?.length || 0}`);
+    
+    for (const authUser of authUsers?.users || []) {
+      try {
+        await supabase.auth.admin.deleteUser(authUser.id);
+        totalDeletados++;
+        console.log(`   ✅ Usuário ${authUser.email} excluído do Auth`);
+      } catch (error) {
+        console.error(`   ❌ Erro ao excluir usuário ${authUser.email} do Auth:`, error.message);
+        erros.push({ tipo: 'usuario_auth', id: authUser.id, erro: error.message });
+      }
+    }
+    
+    // 4. EXCLUIR TODAS AS SOLICITAÇÕES
+    console.log('📝 [RESET] Excluindo todas as solicitações...');
+    const solicitacoes = await kv.getByPrefix("solicitacao:");
+    console.log(`   Total de solicitações: ${solicitacoes.length}`);
+    
+    for (const solicitacao of solicitacoes) {
+      try {
+        await kv.del(`solicitacao:${solicitacao.id}`);
+        totalDeletados++;
+        console.log(`   ✅ Solicitação de ${solicitacao.email} excluída`);
+      } catch (error) {
+        console.error(`   ❌ Erro ao excluir solicitação de ${solicitacao.email}:`, error.message);
+        erros.push({ tipo: 'solicitacao', id: solicitacao.id, erro: error.message });
+      }
+    }
+    
+    // 5. EXCLUIR TODAS AS NOTIFICAÇÕES
+    console.log('🔔 [RESET] Excluindo todas as notificações...');
+    const notificacoes = await kv.getByPrefix("notificacao:");
+    console.log(`   Total de notificações: ${notificacoes.length}`);
+    
+    for (const notificacao of notificacoes) {
+      try {
+        await kv.del(`notificacao:${notificacao.id}`);
+        totalDeletados++;
+        console.log(`   ✅ Notificação excluída`);
+      } catch (error) {
+        console.error(`   ❌ Erro ao excluir notificação:`, error.message);
+        erros.push({ tipo: 'notificacao', id: notificacao.id, erro: error.message });
+      }
+    }
+    
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log(`✅ [RESET] LIMPEZA TOTAL CONCLUÍDA!`);
+    console.log(`   Total de itens excluídos: ${totalDeletados}`);
+    console.log(`   Erros: ${erros.length}`);
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
+    
+    return c.json({
+      success: true,
+      message: 'Sistema completamente limpo! Todos os dados foram excluídos.',
+      estatisticas: {
+        contratos: contratos.length,
+        usuariosKV: usuarios.length,
+        usuariosAuth: authUsers?.users?.length || 0,
+        solicitacoes: solicitacoes.length,
+        notificacoes: notificacoes.length,
+        totalExcluidos: totalDeletados,
+        totalErros: erros.length
+      },
+      erros: erros.length > 0 ? erros : undefined
+    });
+    
+  } catch (error) {
+    console.error('❌ [RESET] Erro crítico na limpeza total:', error.message);
+    console.error('❌ Stack trace:', error.stack);
+    return c.json({ error: `Erro na limpeza total: ${error.message}` }, 500);
+  }
+});
+
+// ========================================
+// INICIAR SERVIDOR
+// ========================================
+
+console.log('');
+console.log('═══════════════════════════════════════════════════════════');
+console.log('✅ SERVIDOR BACKEND INICIANDO...');
+console.log('═══════════════════════════════════════════════════════════');
+console.log('');
+console.log('🚀 Edge Function: server');
+console.log('🔌 Endpoint: /*');
+console.log('📡 Status: Aguardando requisições...');
+console.log('');
+console.log('═══════════════════════════════════════════════════════════');
+
 Deno.serve(app.fetch);
+console.log('');

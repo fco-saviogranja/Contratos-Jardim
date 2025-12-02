@@ -7,29 +7,19 @@ import { Dashboard } from './pages/Dashboard';
 import { TodosContratos } from './pages/TodosContratos';
 import { CadastroContrato } from './pages/CadastroContrato';
 import { GerenciarUsuarios } from './pages/GerenciarUsuarios';
+import { GerenciarSecretarias } from './pages/GerenciarSecretarias';
 import { AlertasPrazos } from './pages/AlertasPrazos';
 import { Relatorios } from './pages/Relatorios';
 import { ParametrosPerfis } from './pages/ParametrosPerfis';
 import { AparenciaLayout } from './pages/AparenciaLayout';
 import { ConfiguracoesGerais } from './pages/ConfiguracoesGerais';
 import { Ajuda } from './pages/Ajuda';
-import { Diagnostico } from './pages/Diagnostico';
 import { Toaster } from 'sonner@2.0.3';
-
-// Utilitários globais disponíveis no console
-import './utils/setupAdminConsole.js';
-import './utils/limparDados.js';
-import './utils/limparUsuariosLocal.js';
 
 function AppContent() {
   const { isAuthenticated } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [showSolicitarAcesso, setShowSolicitarAcesso] = useState(false);
-
-  // Verificar se está acessando a página de diagnóstico
-  if (window.location.pathname === '/diagnostico') {
-    return <Diagnostico />;
-  }
 
   if (!isAuthenticated) {
     // Mostrar página de solicitar acesso
@@ -53,6 +43,8 @@ function AppContent() {
         return <Relatorios />;
       case 'usuarios':
         return <GerenciarUsuarios />;
+      case 'secretarias':
+        return <GerenciarSecretarias />;
       case 'parametros':
         return <ParametrosPerfis />;
       case 'aparencia':
