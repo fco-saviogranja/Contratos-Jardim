@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Settings, Globe, Bell, Shield, Mail, Trash2, AlertTriangle } from 'lucide-react';
-import { contratos as contratosAPI } from '../utils/api';
+import { Settings, Globe, Bell, Shield, Mail, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { contratos as contratosAPI, apiRequest } from '../utils/api';
 import { toast } from 'sonner';
 
 export function ConfiguracoesGerais() {
@@ -17,6 +17,8 @@ export function ConfiguracoesGerais() {
   const [emailAuto, setEmailAuto] = useState(true);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showConfirmRestore, setShowConfirmRestore] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const handleLimparContratos = async () => {
     if (!window.confirm('⚠️ ATENÇÃO: Você está prestes a deletar TODOS os contratos do sistema!\n\nEsta ação é IRREVERSÍVEL e não pode ser desfeita.\n\nTodos os contratos cadastrados serão permanentemente excluídos.\n\nDeseja realmente continuar?')) {
@@ -50,6 +52,43 @@ export function ConfiguracoesGerais() {
     } finally {
       setDeleting(false);
       setShowConfirmDelete(false);
+    }
+  };
+
+  const handleRestaurarPadroes = async () => {
+    setShowConfirmRestore(false);
+    
+    try {
+      setRestoring(true);
+      toast.loading('Restaurando usuários padrão do sistema...');
+      
+      const response = await apiRequest('/admin/restaurar-padroes', {
+        method: 'POST'
+      });
+      
+      if (response.success) {
+        toast.success(`✅ ${response.resumo.totalCriados} usuário(s) padrão criado(s) com sucesso!`);
+        console.log('✅ Restauração concluída:', response);
+        
+        // Mostrar detalhes dos usuários criados no console
+        console.table(response.usuarios);
+        
+        toast.success('🔄 Recarregando página em 3 segundos...', {
+          duration: 3000
+        });
+        
+        // Recarregar página após 3 segundos
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+      } else {
+        throw new Error(response.error || 'Falha ao restaurar usuários padrão');
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao restaurar padrões:', error);
+      toast.error(error.message || 'Erro ao restaurar usuários padrão');
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -332,7 +371,10 @@ export function ConfiguracoesGerais() {
 
       {/* Botões de ação */}
       <div className="flex justify-end gap-3">
-        <button className="px-6 py-2 border border-gray-300 rounded-md text-[#102a43] text-sm hover:bg-gray-50 font-medium">
+        <button
+          onClick={() => setShowConfirmRestore(true)}
+          className="px-6 py-2 border border-gray-300 rounded-md text-[#102a43] text-sm hover:bg-gray-50 font-medium"
+        >
           Restaurar padrões
         </button>
         <button className="px-6 py-2 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium">
@@ -390,6 +432,73 @@ export function ConfiguracoesGerais() {
                 disabled={deleting}
               >
                 {deleting ? 'Deletando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação de restauração */}
+      {showConfirmRestore && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md">
+            <div className="flex items-center gap-4 mb-4">
+              <RefreshCw className="size-6 text-blue-600" />
+              <h2 className="text-[#102a43] font-medium">
+                Restaurar Usuários Padrão
+              </h2>
+            </div>
+            
+            <div className="space-y-3 mb-4">
+              <p className="text-gray-700 text-sm">
+                Esta ação irá <strong>criar os seguintes usuários padrão</strong> no sistema:
+              </p>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                <div className="text-sm">
+                  <p className="text-blue-900 font-medium">👤 Administrador do Sistema</p>
+                  <p className="text-blue-700 text-xs">admin@jardim.ce.gov.br • Senha: Admin@2024</p>
+                </div>
+                
+                <div className="text-sm">
+                  <p className="text-blue-900 font-medium">👤 Maria Silva</p>
+                  <p className="text-blue-700 text-xs">maria.silva@jardim.ce.gov.br • Senha: Gestor@2024</p>
+                </div>
+                
+                <div className="text-sm">
+                  <p className="text-blue-900 font-medium">👤 João Santos</p>
+                  <p className="text-blue-700 text-xs">joao.santos@jardim.ce.gov.br • Senha: Fiscal@2024</p>
+                </div>
+              </div>
+              
+              <p className="text-gray-600 text-sm">
+                ℹ️ Se algum usuário já existir, ele será mantido e não será sobrescrito.
+              </p>
+            </div>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                className="px-6 py-2 border border-gray-300 rounded-md text-[#102a43] text-sm hover:bg-gray-50 font-medium"
+                onClick={() => setShowConfirmRestore(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="px-6 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 font-medium flex items-center gap-2"
+                onClick={handleRestaurarPadroes}
+                disabled={restoring}
+              >
+                {restoring ? (
+                  <>
+                    <RefreshCw className="size-4 animate-spin" />
+                    Criando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="size-4" />
+                    Criar Usuários
+                  </>
+                )}
               </button>
             </div>
           </div>

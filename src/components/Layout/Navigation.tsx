@@ -34,13 +34,65 @@ export function Navigation({ currentPage, onNavigate }: NavigationProps) {
     return isAdmin;
   }, [user?.perfil]);
 
-  // Debug: verificar perfil do usuário
+  // Debug: Verificar perfil do usuário para determinar permissões
   useEffect(() => {
-    if (user) {
-      console.log('🔍 [NAVIGATION DEBUG] Perfil do usuário:', user.perfil);
-      console.log('🔍 [NAVIGATION DEBUG] É admin?', isUserAdmin);
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('🔍 VERIFICANDO PERFIL DO USUÁRIO PARA MENU DE NAVEGAÇÃO');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('👤 Usuário completo:', JSON.stringify(user, null, 2));
+    console.log('📋 Nome:', user?.nome);
+    console.log('📧 E-mail:', user?.email);
+    console.log('🎭 Perfil RAW:', JSON.stringify(user?.perfil));
+    console.log('🎭 Perfil TIPO:', typeof user?.perfil);
+    console.log('🏢 Secretaria:', user?.secretaria);
+    
+    const perfil = user?.perfil?.trim() || '';
+    const isAdmin = perfil === 'admin' || 
+                   perfil === 'Administrador CGM' || 
+                   perfil.toLowerCase() === 'administrador cgm' ||
+                   perfil.toLowerCase() === 'admin';
+    
+    const isGestor = perfil === 'gestor' || 
+                    perfil === 'Gestor de Contratos' || 
+                    perfil.toLowerCase() === 'gestor de contratos' ||
+                    perfil.toLowerCase() === 'gestor';
+    
+    const isFiscal = perfil === 'fiscal' || 
+                    perfil === 'Fiscal de Contratos' || 
+                    perfil.toLowerCase() === 'fiscal de contratos' ||
+                    perfil.toLowerCase() === 'fiscal';
+    
+    console.log('');
+    console.log('🔐 PERMISSÕES DETECTADAS:');
+    console.log('  ✅ É Admin?', isAdmin);
+    console.log('  ✅ É Gestor?', isGestor);
+    console.log('  ✅ É Fiscal?', isFiscal);
+    console.log('');
+    
+    if (isAdmin) {
+      console.log('✅ MENU DE ADMINISTRAÇÃO APARECERÁ!');
+      console.log('📋 Itens disponíveis:');
+      console.log('   • Dashboard');
+      console.log('   • Todos os Contratos');
+      console.log('   • Alertas e Notificações');
+      console.log('   • Gerenciar Usuários (ADMIN ONLY)');
+    } else if (isGestor) {
+      console.log('✅ MENU DE GESTOR APARECERÁ!');
+      console.log('📋 Itens disponíveis:');
+      console.log('   • Dashboard');
+      console.log('   • Todos os Contratos');
+      console.log('   • Alertas e Notificações');
+    } else if (isFiscal) {
+      console.log('✅ MENU DE FISCAL APARECERÁ!');
+      console.log('📋 Itens disponíveis:');
+      console.log('   • Todos os Contratos (visualização)');
+      console.log('   • Alertas e Notificações');
+    } else {
+      console.warn('⚠️ MENU PODE NÃO APARECER CORRETAMENTE!');
+      console.warn('💡 Verifique se o perfil está como "admin", "gestor" ou "fiscal"');
     }
-  }, [user, isUserAdmin]);
+    console.log('═══════════════════════════════════════════════════════════');
+  }, [user]);
 
   // Carregar alertas pendentes
   useEffect(() => {

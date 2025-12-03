@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, CheckCircle, XCircle, AlertCircle, RefreshCw, User, Key, Shield } from 'lucide-react';
-import { apiRequest } from '../utils/api';
+import { Settings, CheckCircle, XCircle, AlertCircle, RefreshCw, User, Key, Shield, UserPlus } from 'lucide-react';
+import { apiRequest, auth } from '../utils/api';
 
 export function Diagnostico() {
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState<any>(null);
-  const [email, setEmail] = useState('controleinterno@jardim.ce.gov.br');
-  const [senha, setSenha] = useState('@Gustavo25');
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
   const [novaSenha, setNovaSenha] = useState('SenhaTemp123');
   const [showConfirmacao, setShowConfirmacao] = useState(false);
+  const [kvStoreData, setKvStoreData] = useState<any>(null);
+  const [edgeFunctionStatus, setEdgeFunctionStatus] = useState<any>(null);
   
   // Verificar usuário logado
   const [usuarioLogado, setUsuarioLogado] = useState<any>(null);
@@ -19,6 +21,42 @@ export function Diagnostico() {
       setUsuarioLogado(JSON.parse(userStr));
     }
   }, []);
+
+  const executarSetupInicial = async () => {
+    setLoading(true);
+    setResultado(null);
+    
+    try {
+      console.log('🔧 Executando Setup Inicial...');
+      const result = await auth.setupAdmin();
+      
+      if (result.success) {
+        setResultado({
+          tipo: 'sucesso',
+          mensagem: `✅ Administrador criado com sucesso!`,
+          detalhes: {
+            nome: result.user?.nome || 'Administrador',
+            email: result.credentials?.email || 'admin@jardim.ce.gov.br',
+            senha: result.credentials?.password || 'senha',
+            perfil: result.user?.perfil || 'admin'
+          }
+        });
+      } else {
+        setResultado({
+          tipo: 'erro',
+          mensagem: result.error || 'Erro ao executar setup inicial'
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao executar setup:', error);
+      setResultado({
+        tipo: 'erro',
+        mensagem: error.message || 'Endpoint de setup removido. Crie usuários manualmente através da página de Gerenciar Usuários.'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const diagnosticarLogin = async () => {
     setLoading(true);
@@ -205,6 +243,198 @@ export function Diagnostico() {
     }
   };
 
+  const verificarKVStore = async () => {
+    setLoading(true);
+    try {
+      console.log('🔍 Verificando KV Store...');
+      
+      // Buscar todos os usuários do KV Store
+      const result = await apiRequest('/admin/listar-usuarios-kv', {
+        method: 'GET'
+      });
+      
+      console.log('📊 Resultado KV Store:', result);
+      
+      setKvStoreData({
+        sucesso: result.success,
+        usuarios: result.usuarios || [],
+        total: result.total || 0,
+        timestamp: new Date().toLocaleString('pt-BR')
+      });
+      
+      setResultado({
+        tipo: 'kv-store',
+        data: result
+      });
+      
+    } catch (error: any) {
+      console.error('❌ Erro ao verificar KV Store:', error);
+      setKvStoreData({
+        sucesso: false,
+        erro: error.message,
+        timestamp: new Date().toLocaleString('pt-BR')
+      });
+      setResultado({
+        tipo: 'erro',
+        mensagem: `Erro ao verificar KV Store: ${error.message}`
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verificarEdgeFunction = async () => {
+    setLoading(true);
+    try {
+      console.log('🔍 Verificando Edge Function...');
+      
+      // Health check da Edge Function
+      const result = await apiRequest('/health', {
+        method: 'GET'
+      });
+      
+      console.log('📊 Resultado Edge Function:', result);
+      
+      setEdgeFunctionStatus({
+        status: result.status || 'ok',
+        online: true,
+        timestamp: result.timestamp || new Date().toISOString(),
+        nome: 'make-server-1a8b02da'
+      });
+      
+      setResultado({
+        tipo: 'edge-function',
+        data: {
+          status: 'online',
+          nome: 'make-server-1a8b02da',
+          timestamp: result.timestamp
+        }
+      });
+      
+    } catch (error: any) {
+      console.error('❌ Erro ao verificar Edge Function:', error);
+      setEdgeFunctionStatus({
+        status: 'offline',
+        online: false,
+        erro: error.message,
+        nome: 'make-server-1a8b02da'
+      });
+      setResultado({
+        tipo: 'erro',
+        mensagem: `Edge Function offline: ${error.message}`
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const criarAdminSimples = async () => {
+    setLoading(true);
+    setResultado(null);
+    
+    try {
+      console.log('🔧 Criando usuário admin funcional...');
+      
+      const result = await apiRequest('/admin/criar-admin-simples', {
+        method: 'POST'
+      });
+      
+      console.log('📊 Resultado:', result);
+      
+      if (result.success) {
+        setResultado({
+          tipo: 'admin-criado',
+          credentials: result.credentials,
+          loginTested: result.loginTested,
+          message: result.message
+        });
+      } else {
+        setResultado({
+          tipo: 'erro',
+          mensagem: result.error || 'Erro ao criar admin'
+        });
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Erro ao criar admin:', error);
+      setResultado({
+        tipo: 'erro',
+        mensagem: `Erro: ${error.message}`
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verificarTudo = async () => {
+    setLoading(true);
+    try {
+      console.log('🔍 Verificando todo o sistema...');
+      
+      // 1. Verificar Edge Function
+      let edgeStatus = { online: false, erro: '' };
+      try {
+        const healthResult = await apiRequest('/health', { method: 'GET' });
+        edgeStatus = { online: true, erro: '' };
+        setEdgeFunctionStatus({
+          status: 'online',
+          online: true,
+          timestamp: healthResult.timestamp,
+          nome: 'make-server-1a8b02da'
+        });
+      } catch (error: any) {
+        edgeStatus = { online: false, erro: error.message };
+        setEdgeFunctionStatus({
+          status: 'offline',
+          online: false,
+          erro: error.message,
+          nome: 'make-server-1a8b02da'
+        });
+      }
+      
+      // 2. Verificar KV Store
+      let kvData = { usuarios: [], total: 0, erro: '' };
+      try {
+        const kvResult = await apiRequest('/admin/listar-usuarios-kv', { method: 'GET' });
+        kvData = {
+          usuarios: kvResult.usuarios || [],
+          total: kvResult.total || 0,
+          erro: ''
+        };
+        setKvStoreData({
+          sucesso: true,
+          usuarios: kvResult.usuarios || [],
+          total: kvResult.total || 0,
+          timestamp: new Date().toLocaleString('pt-BR')
+        });
+      } catch (error: any) {
+        kvData = { usuarios: [], total: 0, erro: error.message };
+        setKvStoreData({
+          sucesso: false,
+          erro: error.message,
+          timestamp: new Date().toLocaleString('pt-BR')
+        });
+      }
+      
+      // Mostrar resultado consolidado
+      setResultado({
+        tipo: 'verificacao-completa',
+        edgeFunction: edgeStatus,
+        kvStore: kvData,
+        timestamp: new Date().toLocaleString('pt-BR')
+      });
+      
+    } catch (error: any) {
+      console.error('❌ Erro na verificação completa:', error);
+      setResultado({
+        tipo: 'erro',
+        mensagem: `Erro na verificação: ${error.message}`
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0b6b3a] to-[#0a5a31] p-4">
       <div className="max-w-5xl mx-auto">
@@ -220,35 +450,134 @@ export function Diagnostico() {
             </div>
           </div>
           
-          {/* Aviso importante */}
-          <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="text-blue-900 font-medium mb-2 flex items-center gap-2">
-              <AlertCircle className="size-5" />
-              Guia Rápido de Reorganização do Sistema
+          {/* GUIA RÁPIDO */}
+          <div className="mt-4 bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-lg p-4">
+            <h3 className="text-yellow-900 font-bold mb-3 flex items-center gap-2 text-lg">
+              <AlertCircle className="size-6" />
+              🚨 Problemas com Login? Siga Este Guia:
             </h3>
-            <ol className="text-blue-700 text-sm space-y-1 ml-6 list-decimal">
-              <li>Clique em <strong>"Limpar Todos os Usuários"</strong> para excluir todos exceto Gustavo Barros</li>
-              <li>Confirme a ação no modal que aparece</li>
-              <li>Faça login com: <code className="bg-blue-100 px-1 rounded">controleinterno@jardim.ce.gov.br</code> / <code className="bg-blue-100 px-1 rounded">@Gustavo25</code></li>
-              <li>O menu <strong>"Administração do sistema"</strong> deve aparecer automaticamente!</li>
-            </ol>
-          </div>
-        </div>
-
-        {/* Usuário Logado */}
-        {usuarioLogado && (
-          <div className="bg-blue-50 border-x border-blue-200 p-4">
-            <div className="flex items-center gap-2">
-              <User className="size-5 text-blue-600" />
-              <div>
-                <p className="text-blue-900 font-medium">{usuarioLogado.nome}</p>
-                <p className="text-blue-700 text-sm">
-                  {usuarioLogado.email} • Perfil: <strong>{usuarioLogado.perfil}</strong>
+            
+            <div className="space-y-3">
+              <div className="bg-white rounded-lg p-3 border-l-4 border-green-500">
+                <p className="text-gray-900 font-bold mb-1">1️⃣ Solução Rápida (RECOMENDADO)</p>
+                <p className="text-gray-700 text-sm">
+                  Role para baixo e clique no botão verde <strong>"🚀 Criar Admin Funcional Agora"</strong>. 
+                  Isso vai criar um usuário admin testado e pronto para usar em segundos!
+                </p>
+              </div>
+              
+              <div className="bg-white rounded-lg p-3 border-l-4 border-blue-500">
+                <p className="text-gray-900 font-bold mb-1">2️⃣ Verificar o Sistema</p>
+                <p className="text-gray-700 text-sm">
+                  Use o botão <strong>"🔍 Verificar Todo o Sistema"</strong> para ver quantos usuários existem 
+                  no KV Store e se a Edge Function está funcionando.
+                </p>
+              </div>
+              
+              <div className="bg-white rounded-lg p-3 border-l-4 border-purple-500">
+                <p className="text-gray-900 font-bold mb-1">3️⃣ Diagnosticar Login Específico</p>
+                <p className="text-gray-700 text-sm">
+                  Se você já tem um usuário criado mas não consegue logar, preencha o email e senha 
+                  e clique em <strong>"Diagnosticar Login"</strong> para ver qual é o problema.
                 </p>
               </div>
             </div>
           </div>
-        )}
+          
+          {/* Ação de Emergência - Limpar Todos os Usuários */}
+          <div className="mt-4 bg-red-50 border-2 border-red-300 rounded-lg p-4">
+            <h3 className="text-red-900 font-bold mb-2 flex items-center gap-2">
+              <XCircle className="size-6" />
+              🚨 Ação de Emergência
+            </h3>
+            <p className="text-red-800 text-sm mb-3">
+              Use esta opção para <strong>EXCLUIR TODOS OS USUÁRIOS</strong> do sistema (frontend + backend). Esta ação é irreversível!
+            </p>
+            <div className="bg-white border border-red-200 rounded-lg p-3 text-sm space-y-2">
+              <p className="text-gray-700">
+                <strong>Via Interface:</strong> Clique no botão "Limpar Todos os Usuários" abaixo
+              </p>
+              <p className="text-gray-700">
+                <strong>Via Página Automática:</strong> Acesse <a href="/limpar-sistema" className="text-red-600 font-bold underline hover:text-red-700">/limpar-sistema</a>
+              </p>
+              <p className="text-gray-700">
+                <strong>Via Console:</strong> Execute no console do navegador:
+              </p>
+              <code className="block bg-gray-100 px-3 py-2 rounded text-red-600 font-mono text-xs">
+                await limparTodosUsuarios()
+              </code>
+            </div>
+          </div>
+        </div>
+
+        {/* Status do Sistema */}
+        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-x border-blue-200 p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Edge Function Status */}
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="flex items-center gap-2 mb-1">
+                <Settings className="size-4 text-indigo-600" />
+                <p className="text-gray-600 text-xs font-medium">Edge Function</p>
+              </div>
+              {edgeFunctionStatus ? (
+                <div className="flex items-center gap-2">
+                  {edgeFunctionStatus.online ? (
+                    <>
+                      <CheckCircle className="size-4 text-green-600" />
+                      <span className="text-sm font-medium text-green-900">Online</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="size-4 text-red-600" />
+                      <span className="text-sm font-medium text-red-900">Offline</span>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <span className="text-xs text-gray-500">Clique para verificar</span>
+              )}
+            </div>
+
+            {/* KV Store Status */}
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="flex items-center gap-2 mb-1">
+                <User className="size-4 text-cyan-600" />
+                <p className="text-gray-600 text-xs font-medium">KV Store</p>
+              </div>
+              {kvStoreData ? (
+                kvStoreData.sucesso ? (
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="size-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-900">{kvStoreData.total} usuários</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <XCircle className="size-4 text-red-600" />
+                    <span className="text-sm font-medium text-red-900">Erro</span>
+                  </div>
+                )
+              ) : (
+                <span className="text-xs text-gray-500">Clique para verificar</span>
+              )}
+            </div>
+
+            {/* Usuário Logado */}
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="flex items-center gap-2 mb-1">
+                <User className="size-4 text-blue-600" />
+                <p className="text-gray-600 text-xs font-medium">Sessão Atual</p>
+              </div>
+              {usuarioLogado ? (
+                <div>
+                  <p className="text-sm font-medium text-blue-900 truncate">{usuarioLogado.nome}</p>
+                  <p className="text-xs text-gray-600 truncate">{usuarioLogado.perfil}</p>
+                </div>
+              ) : (
+                <span className="text-xs text-gray-500">Não logado</span>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Formulário */}
         <div className="bg-white border-x shadow-2xl p-6 space-y-4">
@@ -287,8 +616,68 @@ export function Diagnostico() {
             </div>
           </div>
 
-          {/* Botões de Ação */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t border-gray-200">
+          {/* Botão PRINCIPAL - Criar Admin Funcional */}
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-4 mb-4">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="bg-green-100 p-2 rounded-lg">
+                <UserPlus className="size-5 text-green-700" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-green-900 font-bold mb-1">✅ Solução Rápida de Login</h3>
+                <p className="text-green-800 text-sm mb-2">
+                  Cria um usuário administrador <strong>TESTADO E FUNCIONAL</strong> em um clique:
+                </p>
+                <div className="bg-white rounded-lg p-3 text-sm mb-3 border border-green-200">
+                  <p className="text-gray-700"><strong>📧 Email:</strong> controleinterno@jardim.ce.gov.br</p>
+                  <p className="text-gray-700"><strong>🔑 Senha:</strong> @Gustavo25</p>
+                  <p className="text-gray-700"><strong>🎭 Perfil:</strong> Administrador CGM</p>
+                  <p className="text-gray-700"><strong>👤 Nome:</strong> Controle Interno CGM</p>
+                </div>
+                <p className="text-green-700 text-xs">
+                  ℹ️ O sistema vai criar o usuário, confirmar o email automaticamente e testar o login para garantir que funciona!
+                </p>
+              </div>
+            </div>
+            
+            <button
+              onClick={criarAdminSimples}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-4 rounded-lg font-bold text-lg hover:from-green-700 hover:to-green-800 transition-colors disabled:opacity-50 shadow-lg"
+            >
+              <UserPlus className="size-6" />
+              {loading ? 'Criando e testando...' : '🚀 Criar Admin Funcional Agora'}
+            </button>
+          </div>
+
+          {/* Botões de Verificação do Sistema */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-4 border-t-2 border-green-200">
+            <button
+              onClick={verificarTudo}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-lg font-medium hover:from-blue-700 hover:to-blue-800 transition-colors disabled:opacity-50 md:col-span-3 shadow-lg"
+            >
+              <Settings className="size-5" />
+              {loading ? 'Verificando...' : '🔍 Verificar Todo o Sistema'}
+            </button>
+            
+            <button
+              onClick={verificarEdgeFunction}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
+            >
+              <Settings className="size-5" />
+              {loading ? 'Verificando...' : 'Edge Function'}
+            </button>
+            
+            <button
+              onClick={verificarKVStore}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 bg-cyan-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-cyan-700 transition-colors disabled:opacity-50"
+            >
+              <User className="size-5" />
+              {loading ? 'Verificando...' : 'KV Store (Usuários)'}
+            </button>
+            
             <button
               onClick={diagnosticarLogin}
               disabled={loading}
@@ -297,6 +686,10 @@ export function Diagnostico() {
               <AlertCircle className="size-5" />
               {loading ? 'Diagnosticando...' : 'Diagnosticar Login'}
             </button>
+          </div>
+
+          {/* Botões de Ação */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t border-gray-200">
             
             <button
               onClick={corrigirUsuario}
@@ -341,6 +734,15 @@ export function Diagnostico() {
             >
               <XCircle className="size-5" />
               {loading ? 'Processando...' : 'Limpar Todos os Usuários'}
+            </button>
+            
+            <button
+              onClick={executarSetupInicial}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 md:col-span-2"
+            >
+              <UserPlus className="size-5" />
+              {loading ? 'Executando...' : 'Setup Inicial'}
             </button>
           </div>
         </div>
@@ -431,6 +833,17 @@ export function Diagnostico() {
                   <div>
                     <p className="text-green-900 font-medium">Sucesso!</p>
                     <p className="text-green-700 text-sm">{resultado.mensagem}</p>
+                    {resultado.detalhes && (
+                      <div className="mt-2">
+                        <p className="text-gray-700 font-medium">Detalhes:</p>
+                        <ul className="text-gray-600 text-sm list-disc ml-4">
+                          <li><strong>Nome:</strong> {resultado.detalhes.nome}</li>
+                          <li><strong>Email:</strong> {resultado.detalhes.email}</li>
+                          <li><strong>Senha:</strong> {resultado.detalhes.senha}</li>
+                          <li><strong>Perfil:</strong> {resultado.detalhes.perfil}</li>
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -471,6 +884,237 @@ export function Diagnostico() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {resultado.tipo === 'admin-criado' && (
+              <div className="space-y-4">
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="bg-green-100 p-3 rounded-full">
+                      <CheckCircle className="size-8 text-green-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-green-900 font-bold text-xl">🎉 Admin Criado com Sucesso!</h3>
+                      <p className="text-green-700 text-sm">{resultado.message}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg border-2 border-green-200 p-5 mb-4">
+                    <h4 className="text-gray-900 font-bold mb-3 flex items-center gap-2">
+                      <Key className="size-5 text-green-600" />
+                      Suas Credenciais de Acesso
+                    </h4>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between bg-gray-50 rounded p-3">
+                        <span className="text-gray-600 font-medium">📧 Email:</span>
+                        <code className="bg-blue-100 text-blue-900 px-3 py-1 rounded font-mono text-sm font-bold">
+                          {resultado.credentials.email}
+                        </code>
+                      </div>
+                      <div className="flex items-center justify-between bg-gray-50 rounded p-3">
+                        <span className="text-gray-600 font-medium">🔑 Senha:</span>
+                        <code className="bg-green-100 text-green-900 px-3 py-1 rounded font-mono text-sm font-bold">
+                          {resultado.credentials.password}
+                        </code>
+                      </div>
+                      <div className="flex items-center justify-between bg-gray-50 rounded p-3">
+                        <span className="text-gray-600 font-medium">👤 Nome:</span>
+                        <span className="text-gray-900 font-medium">{resultado.credentials.nome}</span>
+                      </div>
+                      <div className="flex items-center justify-between bg-gray-50 rounded p-3">
+                        <span className="text-gray-600 font-medium">🎭 Perfil:</span>
+                        <span className="bg-purple-100 text-purple-900 px-3 py-1 rounded font-medium text-sm">
+                          {resultado.credentials.perfil}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {resultado.loginTested && (
+                    <div className="bg-green-100 border border-green-300 rounded-lg p-4 mb-4">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="size-5 text-green-700" />
+                        <p className="text-green-900 font-bold">✅ Login testado e FUNCIONANDO!</p>
+                      </div>
+                      <p className="text-green-800 text-sm mt-1">
+                        O sistema fez um teste automático de login e confirmou que as credenciais estão corretas.
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="text-blue-900 font-bold mb-2 flex items-center gap-2">
+                      <AlertCircle className="size-5" />
+                      Próximos Passos
+                    </h4>
+                    <ol className="text-blue-800 text-sm space-y-2 ml-4 list-decimal">
+                      <li>Copie as credenciais acima (principalmente a senha)</li>
+                      <li>Clique no botão "Voltar para Login" abaixo</li>
+                      <li>Use o email e senha mostrados acima</li>
+                      <li>Pronto! Você terá acesso total ao sistema como Administrador</li>
+                    </ol>
+                  </div>
+                  
+                  <div className="flex gap-3 mt-4">
+                    <a
+                      href="/"
+                      className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-700 transition-colors text-center"
+                    >
+                      <CheckCircle className="size-5" />
+                      Voltar para Login
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {resultado.tipo === 'verificacao-completa' && (
+              <div className="space-y-4">
+                <h3 className="text-gray-900 font-medium text-lg border-b border-gray-200 pb-2">
+                  ✅ Verificação Completa do Sistema
+                </h3>
+                
+                {/* Edge Function Status */}
+                <div className={`p-4 rounded-lg border ${resultado.edgeFunction.online ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {resultado.edgeFunction.online ? (
+                      <CheckCircle className="size-5 text-green-600" />
+                    ) : (
+                      <XCircle className="size-5 text-red-600" />
+                    )}
+                    <h4 className={`font-medium ${resultado.edgeFunction.online ? 'text-green-900' : 'text-red-900'}`}>
+                      Edge Function: make-server-1a8b02da
+                    </h4>
+                  </div>
+                  {resultado.edgeFunction.online ? (
+                    <p className="text-green-700 text-sm">✅ Edge Function está ONLINE e funcionando!</p>
+                  ) : (
+                    <p className="text-red-700 text-sm">❌ Edge Function OFFLINE: {resultado.edgeFunction.erro}</p>
+                  )}
+                </div>
+
+                {/* KV Store Status */}
+                <div className={`p-4 rounded-lg border ${resultado.kvStore.total > 0 ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {resultado.kvStore.total > 0 ? (
+                      <CheckCircle className="size-5 text-green-600" />
+                    ) : (
+                      <AlertCircle className="size-5 text-yellow-600" />
+                    )}
+                    <h4 className={`font-medium ${resultado.kvStore.total > 0 ? 'text-green-900' : 'text-yellow-900'}`}>
+                      KV Store: kv_store_1a8b02da
+                    </h4>
+                  </div>
+                  {resultado.kvStore.erro ? (
+                    <p className="text-red-700 text-sm">❌ Erro ao acessar: {resultado.kvStore.erro}</p>
+                  ) : (
+                    <div>
+                      <p className="text-gray-700 text-sm mb-3">
+                        <strong>{resultado.kvStore.total}</strong> usuário(s) cadastrado(s) no KV Store
+                      </p>
+                      
+                      {resultado.kvStore.usuarios.length > 0 && (
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {resultado.kvStore.usuarios.map((user: any, index: number) => (
+                            <div key={index} className="bg-white border border-gray-200 rounded-lg p-3">
+                              <p className="text-gray-900 font-medium">{user.nome}</p>
+                              <p className="text-gray-600 text-sm">{user.email}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">{user.perfil}</span>
+                                <span className="text-xs text-gray-500">{user.secretaria}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Timestamp */}
+                <div className="text-gray-500 text-sm text-center">
+                  Verificado em: {resultado.timestamp}
+                </div>
+              </div>
+            )}
+
+            {resultado.tipo === 'edge-function' && (
+              <div className="space-y-4">
+                <h3 className="text-gray-900 font-medium text-lg border-b border-gray-200 pb-2">
+                  Edge Function Status
+                </h3>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="size-6 text-green-600" />
+                    <div>
+                      <p className="text-green-900 font-medium">make-server-1a8b02da está ONLINE!</p>
+                      <p className="text-green-700 text-sm">Status: {resultado.data.status}</p>
+                      <p className="text-gray-600 text-sm">Timestamp: {new Date(resultado.data.timestamp).toLocaleString('pt-BR')}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {resultado.tipo === 'kv-store' && (
+              <div className="space-y-4">
+                <h3 className="text-gray-900 font-medium text-lg border-b border-gray-200 pb-2">
+                  KV Store - Usuários Cadastrados
+                </h3>
+                
+                {resultado.data.success ? (
+                  <>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <p className="text-blue-900 font-medium">
+                        Total de usuários no KV Store: <strong>{resultado.data.total}</strong>
+                      </p>
+                    </div>
+                    
+                    {resultado.data.usuarios && resultado.data.usuarios.length > 0 ? (
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {resultado.data.usuarios.map((user: any, index: number) => (
+                          <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="text-gray-900 font-medium">{user.nome}</p>
+                                <p className="text-gray-600 text-sm">{user.email}</p>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-medium">
+                                    {user.perfil}
+                                  </span>
+                                  <span className="text-xs text-gray-500">{user.secretaria}</span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className={`text-xs px-2 py-0.5 rounded ${user.situacao === 'ativo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                  {user.situacao}
+                                </span>
+                              </div>
+                            </div>
+                            {user.criadoEm && (
+                              <p className="text-gray-500 text-xs mt-2">
+                                Criado: {new Date(user.criadoEm).toLocaleString('pt-BR')}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <p className="text-yellow-900 text-sm">
+                          ⚠️ Nenhum usuário encontrado no KV Store
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-red-900 text-sm">
+                      ❌ Erro ao buscar usuários do KV Store
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -571,8 +1215,8 @@ export function Diagnostico() {
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
               <p className="text-red-900 text-sm font-medium mb-2">⚠️ ATENÇÃO:</p>
               <ul className="text-red-700 text-sm space-y-1 ml-4 list-disc">
-                <li>Todos os usuários serão excluídos do sistema</li>
-                <li>Apenas <strong>Gustavo Barros</strong> será mantido</li>
+                <li><strong>TODOS</strong> os usuários serão excluídos do sistema</li>
+                <li>Nenhum usuário será mantido</li>
                 <li>Esta ação é <strong>IRREVERSÍVEL</strong></li>
               </ul>
             </div>

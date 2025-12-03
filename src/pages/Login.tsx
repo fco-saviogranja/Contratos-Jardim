@@ -30,45 +30,45 @@ export function Login({ onShowSolicitarAcesso }: LoginProps) {
         setError('Credenciais inválidas. Verifique seu e-mail e senha.');
       }
     } catch (err: any) {
-      console.error('Erro no login:', err);
+      console.error('❌ [LOGIN] Erro:', err);
       
-      // Limpar mensagens técnicas e mostrar erro amigável
+      // Mensagens de erro amigáveis
       let errorMessage = 'Erro ao fazer login. Tente novamente.';
       
-      // Verificar se é erro de parsing JSON
+      // Erro de parsing JSON
       if (err instanceof SyntaxError && err.message?.includes('JSON')) {
-        errorMessage = '🔌 Erro de comunicação com o servidor Supabase.\n\n' +
-          '⚠️ O servidor retornou uma resposta inválida.\n\n' +
-          '💡 Possíveis causas:\n' +
-          '• As Edge Functions não estão implantadas corretamente\n' +
-          '• O endpoint não existe ou está retornando HTML\n' +
-          '• O servidor está retornando erro 404 ou 500\n\n' +
-          '🔧 Solução: Acesse as "Ferramentas de Diagnóstico" abaixo para verificar o status do servidor.';
+        errorMessage = '🔌 Erro de comunicação com o servidor.\n\n' +
+          'O servidor retornou uma resposta inválida.\n\n' +
+          '💡 Entre em contato com o administrador do sistema.';
       }
-      // Verificar se é erro de backend indisponível
+      // Backend indisponível
       else if (err.message === 'BACKEND_UNAVAILABLE' || 
           err.message?.includes('Failed to fetch') ||
           err.message?.includes('NetworkError') ||
           err.message?.includes('conexão')) {
-        errorMessage = '🔌 Não foi possível conectar ao servidor Supabase.\n\n' +
-          '⚠️ Possíveis causas:\n' +
-          '• O servidor pode estar temporariamente indisponível\n' +
-          '• Verifique sua conexão com a internet\n' +
-          '• As Edge Functions podem não estar implantadas\n\n' +
-          '💡 Dica: Acesse as "Ferramentas de Diagnóstico" abaixo para mais informações.';
+        errorMessage = '🔌 Não foi possível conectar ao servidor.\n\n' +
+          'Verifique sua conexão com a internet ou tente novamente em alguns instantes.\n\n' +
+          'Se o problema persistir, entre em contato com o suporte.';
       }
-      // Verificar se é solicitação pendente
+      // Solicitação pendente
       else if (err.message?.includes('solicitação de cadastro') && err.message?.includes('pendente')) {
         errorMessage = '⏳ Sua solicitação de cadastro ainda está sendo analisada.\n\n' +
-          'Por favor, aguarde até que um administrador aprove seu acesso ao sistema.\n\n' +
+          'Aguarde até que um administrador aprove seu acesso.\n\n' +
           '💡 Você receberá um e-mail quando sua solicitação for aprovada.';
       } 
+      // Credenciais inválidas
       else if (err.message?.includes('Credenciais inválidas') || 
           err.message?.includes('Invalid login credentials') ||
           err.message?.includes('Sessão expirada')) {
-        errorMessage = 'E-mail ou senha incorretos. Verifique suas credenciais e tente novamente.';
-      } else if (err.message?.includes('servidor')) {
-        errorMessage = 'Não foi possível conectar ao servidor. Tente novamente em alguns instantes.';
+        errorMessage = 'E-mail ou senha incorretos.\n\nVerifique suas credenciais e tente novamente.';
+      } 
+      // Erro genérico de servidor
+      else if (err.message?.includes('servidor')) {
+        errorMessage = 'Não foi possível conectar ao servidor.\n\nTente novamente em alguns instantes.';
+      }
+      // Usar mensagem do erro se for específica
+      else if (err.message && !err.message.includes('Error')) {
+        errorMessage = err.message;
       }
       
       setError(errorMessage);
@@ -121,7 +121,7 @@ export function Login({ onShowSolicitarAcesso }: LoginProps) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="email@email.com"
+                placeholder="seuemail@jardim.ce.gov.br"
                 required
                 className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0b6b3a] focus:border-transparent"
               />
@@ -148,9 +148,19 @@ export function Login({ onShowSolicitarAcesso }: LoginProps) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#0b6b3a] text-white py-3 rounded-lg font-medium hover:bg-[#0a5a31] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-[#0b6b3a] text-white py-3 rounded-lg font-medium hover:bg-[#0a5a31] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {loading ? 'Entrando...' : 'Entrar no sistema'}
+            {loading ? (
+              <>
+                <div className="size-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Conectando ao servidor...
+              </>
+            ) : (
+              <>
+                <LogIn className="size-5" />
+                Entrar no sistema
+              </>
+            )}
           </button>
 
           <div className="border-t border-gray-200 pt-4">

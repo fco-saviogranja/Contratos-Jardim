@@ -43,16 +43,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  // REMOVIDO: Verificação periódica de sessão que causava loops infinitos
-  // A sessão agora é verificada apenas quando necessário (nas chamadas à API)
-
   const login = async (email: string, senha: string): Promise<boolean> => {
     try {
-      console.log('Tentando login com backend Supabase...');
+      console.log('🌐 [AUTH] Tentando login com backend Supabase...');
+      console.log('📧 [AUTH] Email:', email);
       
       // Limpar qualquer sessão antiga antes de fazer login
       auth.logout();
       
+      // Fazer login via API (backend Supabase)
       const result = await auth.login(email, senha);
       
       if (result.success && result.user) {
@@ -68,29 +67,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
         
         setUser(userData);
-        console.log('Login bem-sucedido com Supabase!', userData);
+        console.log('✅ [AUTH] Login bem-sucedido com Supabase!', userData);
         return true;
       }
       
-      console.log('Login falhou - credenciais inválidas');
+      console.log('❌ [AUTH] Login falhou - credenciais inválidas');
       return false;
     } catch (error: any) {
-      console.error('Erro ao fazer login:', error);
+      console.error('❌ [AUTH] Erro ao fazer login:', error);
       
       // Sempre limpar sessão em caso de erro
       auth.logout();
       setUser(null);
       
-      // Se for erro de backend indisponível, propagar com mensagem clara
-      if (error.message === 'BACKEND_UNAVAILABLE') {
-        throw new Error('BACKEND_UNAVAILABLE');
-      }
-      
-      // Se for erro de rede (Failed to fetch), tratar especialmente
-      if (error.message?.includes('Failed to fetch')) {
-        throw new Error('BACKEND_UNAVAILABLE');
-      }
-      
+      // Propagar o erro original para tratamento no componente
       throw error;
     }
   };
@@ -98,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     auth.logout();
     setUser(null);
-    console.log('Logout realizado');
+    console.log('✅ [AUTH] Logout realizado');
   };
 
   return (

@@ -197,14 +197,14 @@ export function diagnosticoCompleto() {
  * Execute: criarAdminAgora()
  */
 export function criarAdminAgora() {
-  console.log('👑 CRIANDO USUÁRIO ADMINISTRADOR...');
+  console.log('🔧 Criando usuário administrador no localStorage...');
   console.log('');
   
   const adminUser = {
-    id: 'admin-gustavo-001',
-    nome: 'Gustavo Barros',
-    email: 'controleinterno@jardim.ce.gov.br',
-    senha: '@Gustavo25',
+    id: 'admin-cgm-001',
+    nome: 'Administrador CGM',
+    email: 'admin@jardim.ce.gov.br',
+    senha: 'Admin123',
     perfil: 'admin',
     secretaria: 'CGM - Controladoria Geral',
     situacao: 'ativo',
@@ -229,8 +229,8 @@ export function criarAdminAgora() {
   
   console.log('✅ Admin criado com sucesso!');
   console.log('');
-  console.log('📧 Email: controleinterno@jardim.ce.gov.br');
-  console.log('🔒 Senha: @Gustavo25');
+  console.log('📧 Email: admin@jardim.ce.gov.br');
+  console.log('🔒 Senha: Admin123');
   console.log('');
   console.log('💡 Agora você pode fazer login!');
   
@@ -276,7 +276,7 @@ export function resetarSistemaCompleto() {
       id: 'sec-001',
       nome: 'Controladoria Geral do Município',
       sigla: 'CGM',
-      responsavel: 'Gustavo Barros',
+      responsavel: '',
       dataCadastro: new Date().toISOString()
     },
     {

@@ -47,17 +47,7 @@ export function SolicitarAcesso() {
       return;
     }
 
-    // 🔧 VERIFICAR SE É O EMAIL DO ADMINISTRADOR
-    if (formData.email === 'controleinterno@jardim.ce.gov.br') {
-      setError('❌ Este é o e-mail do administrador do sistema.\n\n' +
-        '💡 Solução:\n' +
-        '1. Volte para a tela de login\n' +
-        '2. Use o e-mail: controleinterno@jardim.ce.gov.br\n' +
-        '3. Use a senha: @Gustavo25\n\n' +
-        '✅ O acesso de administrador já está configurado!');
-      setLoading(false);
-      return;
-    }
+    // Removido: Verificação de email específico - não há mais usuários pré-definidos
 
     try {
       console.log('📤 Enviando solicitação de acesso...');

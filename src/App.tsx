@@ -14,13 +14,15 @@ import { AparenciaLayout } from './pages/AparenciaLayout';
 import { ConfiguracoesGerais } from './pages/ConfiguracoesGerais';
 import { Ajuda } from './pages/Ajuda';
 import { Diagnostico } from './pages/Diagnostico';
+import { LimparSistema } from './pages/LimparSistema';
 import { Toaster } from 'sonner@2.0.3';
 
 // Utilitários globais disponíveis no console
-import './utils/setupAdminConsole.js';
 import './utils/limparDados.js';
-import './utils/limparUsuariosLocal.js';
 import './utils/diagnostico.tsx';
+import './utils/limparTodosUsuarios.js';
+import './utils/testarConexao.tsx';
+import './utils/verificarConfig.tsx';
 
 function AppContent() {
   const { isAuthenticated } = useAuth();
@@ -30,6 +32,11 @@ function AppContent() {
   // Verificar se está acessando a página de diagnóstico
   if (window.location.pathname === '/diagnostico') {
     return <Diagnostico />;
+  }
+
+  // Verificar se está acessando a página de limpar sistema
+  if (window.location.pathname === '/limpar-sistema') {
+    return <LimparSistema />;
   }
 
   if (!isAuthenticated) {

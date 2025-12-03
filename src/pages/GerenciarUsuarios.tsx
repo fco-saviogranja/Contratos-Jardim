@@ -70,7 +70,7 @@ export function GerenciarUsuarios() {
       
       if (response.success && response.usuarios) {
         setUsuarios(response.usuarios);
-        toast.success('Usuários carregados com sucesso!');
+        // Removido: toast.success - não mostrar notificação de sucesso no carregamento
       }
     } catch (error: any) {
       console.error('❌ Erro ao carregar usuários:', error);
@@ -92,7 +92,7 @@ export function GerenciarUsuarios() {
         const pendentes = response.solicitacoes.filter((s: any) => s.status === 'pendente');
         setSolicitacoes(pendentes);
         console.log(`✅ ${pendentes.length} solicitações pendentes carregadas`);
-        toast.success(`${pendentes.length} solicitações pendentes carregadas`);
+        // Removido: toast.success - não mostrar notificação de sucesso no carregamento
       }
     } catch (error: any) {
       console.error('❌ Erro ao carregar solicitações:', error);

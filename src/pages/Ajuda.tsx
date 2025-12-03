@@ -1336,7 +1336,7 @@ function SecaoFAQ() {
             </p>
             <ul className="space-y-1">
               <li>📧 <strong>E-mail:</strong> controleinterno@jardim.ce.gov.br</li>
-              <li>👤 <strong>Responsável:</strong> Gustavo Barros (Administrador)</li>
+              <li>👤 <strong>Responsável:</strong> Equipe CGM (Controladoria Geral)</li>
             </ul>
           </div>
         </details>

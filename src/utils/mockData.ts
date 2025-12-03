@@ -1,37 +1,5 @@
-// Mock data para desenvolvimento offline (quando Edge Function não está deployada)
-
-export const MOCK_USERS = [
-  {
-    id: 'admin-001',
-    email: 'controleinterno@jardim.ce.gov.br',
-    nome: 'Gustavo Barros',
-    perfil: 'admin',
-    secretaria: 'CGM - Controladoria Geral do Município',
-    situacao: 'ativo',
-    criadoEm: '2024-01-15T10:00:00Z',
-    ultimoAcesso: new Date().toISOString()
-  },
-  {
-    id: 'gestor-001',
-    email: 'gestor.educacao@jardim.ce.gov.br',
-    nome: 'Maria Silva',
-    perfil: 'gestor',
-    secretaria: 'Secretaria Municipal de Educação',
-    situacao: 'ativo',
-    criadoEm: '2024-02-10T09:30:00Z',
-    ultimoAcesso: '2024-11-25T14:22:00Z'
-  },
-  {
-    id: 'fiscal-001',
-    email: 'fiscal.obras@jardim.ce.gov.br',
-    nome: 'João Santos',
-    perfil: 'fiscal',
-    secretaria: 'Secretaria Municipal de Obras e Serviços Públicos',
-    situacao: 'ativo',
-    criadoEm: '2024-03-05T11:15:00Z',
-    ultimoAcesso: '2024-11-24T16:45:00Z'
-  }
-];
+// Array vazio - nenhum usuário pré-cadastrado no modo offline
+export const mockUsersData: any[] = [];
 
 export const MOCK_SECRETARIAS = [
   { id: '1', nome: 'Secretaria Municipal de Administração e Finanças', sigla: 'SEMAF', responsavel: 'Carlos Mendes', situacao: 'ativa', criadoEm: '2024-01-01T00:00:00Z' },
@@ -275,7 +243,7 @@ export function saveMockData<T>(key: string, data: T[]): void {
 
 // Inicializar dados mock no localStorage se não existirem
 export function initializeMockData(): void {
-  getMockData('users', MOCK_USERS);
+  getMockData('users', mockUsersData);
   getMockData('secretarias', MOCK_SECRETARIAS);
   getMockData('contratos', MOCK_CONTRATOS);
   getMockData('solicitacoes', MOCK_SOLICITACOES);
