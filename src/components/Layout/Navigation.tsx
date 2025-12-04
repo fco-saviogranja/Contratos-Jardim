@@ -96,6 +96,12 @@ export function Navigation({ currentPage, onNavigate }: NavigationProps) {
 
   // Carregar alertas pendentes
   useEffect(() => {
+    // Não tentar carregar alertas se não estiver autenticado
+    if (!user) {
+      setAlertasPendentes(0);
+      return;
+    }
+
     const carregarAlertas = async () => {
       try {
         const response = await alertasAPI.getAll();
@@ -106,19 +112,25 @@ export function Navigation({ currentPage, onNavigate }: NavigationProps) {
           ).length;
           setAlertasPendentes(pendentes);
         }
-      } catch (error) {
-        console.warn('⚠️ Erro ao carregar alertas para navegação:', error);
+      } catch (error: any) {
+        // Se for erro de sessão expirada, apenas silenciar
+        if (error.message?.includes('SESSION_EXPIRED') || error.message?.includes('Sessão expirada')) {
+          console.info('ℹ️ [NAVIGATION] Sessão expirada - alertas não carregados (isso é normal)');
+        } else {
+          console.warn('⚠️ [NAVIGATION] Erro ao carregar alertas:', error.message || error);
+        }
         // Se houver erro, não mostrar badge
         setAlertasPendentes(0);
       }
     };
 
+    // Carregar imediatamente
     carregarAlertas();
     
-    // Atualizar a cada 60 segundos
-    const interval = setInterval(carregarAlertas, 60000);
+    // Atualizar a cada 2 minutos (reduzido para evitar muitas requisições)
+    const interval = setInterval(carregarAlertas, 120000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user]); // Recarregar quando o usuário mudar
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -181,13 +193,21 @@ export function Navigation({ currentPage, onNavigate }: NavigationProps) {
     console.log('📋 Itens de administração:', adminItems.length);
     console.log('📊 Menu visível?', adminItems.length > 0 ? '✅ SIM' : '❌ NÃO');
     if (adminItems.length > 0) {
-      console.log('📝 Itens disponíveis:');
+      console.log(`   ✅ ${adminItems.length} itens de administração disponíveis:`);
       adminItems.forEach(item => {
         console.log(`   - ${item.label}`);
       });
     } else {
-      console.warn('⚠️ MENU DE ADMINISTRAÇÃO NÃO APARECERÁ!');
-      console.warn('💡 Verifique se o perfil está como "Administrador CGM"');
+      console.info('ℹ️ [NAVIGATION] Perfil não reconhecido como administrador');
+      console.info('💡 Perfil atual:', user?.perfil);
+      console.info('');
+      console.info('📝 NOTA: Se você é o administrador principal (controleinterno@jardim.ce.gov.br),');
+      console.info('   o sistema corrigirá automaticamente seu perfil no próximo login.');
+      console.info('');
+      console.info('🔧 CORREÇÃO MANUAL (se necessário):');
+      console.info('   1. Execute no console: verificarPerfil()');
+      console.info('   2. Execute no console: corrigirPerfilAdmin()');
+      console.info('   3. Recarregue a página (F5)');
     }
     console.log('═══════════════════════════════════════════════════════════');
     console.log('');

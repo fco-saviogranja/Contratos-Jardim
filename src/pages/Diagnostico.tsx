@@ -98,13 +98,17 @@ export function Diagnostico() {
     try {
       const result = await apiRequest('/debug/fix-user', {
         method: 'POST',
-        body: JSON.stringify({ email, novaSenha }),
+        body: JSON.stringify({ email }),
       });
       
       if (result.success) {
         setResultado({
-          tipo: 'sucesso',
-          mensagem: `Usuário corrigido! Use a senha: ${novaSenha}`
+          tipo: 'fix-success',
+          mensagem: result.message,
+          authUser: result.authUser,
+          kvUser: result.kvUser,
+          loginTest: result.loginTest,
+          credentials: result.credentials
         });
       } else {
         setResultado({
@@ -820,6 +824,56 @@ export function Diagnostico() {
                     <div>
                       <p className="text-red-700 text-sm font-medium">❌ A senha está INCORRETA!</p>
                       <p className="text-red-600 text-sm mt-1">Clique em "Resetar Senha" para definir uma nova senha.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {resultado.tipo === 'fix-success' && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle className="size-6 text-green-600" />
+                  <div>
+                    <p className="text-green-900 font-medium">✅ Usuário Sincronizado com Sucesso!</p>
+                    <p className="text-green-700 text-sm">{resultado.mensagem}</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-3 mt-4">
+                  <div className="bg-white rounded-lg p-3 border border-green-200">
+                    <p className="text-gray-700 font-medium mb-2">📊 Status do Usuário:</p>
+                    <div className="space-y-1 text-sm">
+                      <p><strong>ID:</strong> {resultado.authUser?.id}</p>
+                      <p><strong>Email:</strong> {resultado.authUser?.email}</p>
+                      <p><strong>Email Confirmado:</strong> {resultado.authUser?.email_confirmed ? '✅ Sim' : '❌ Não'}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg p-3 border border-green-200">
+                    <p className="text-gray-700 font-medium mb-2">💾 Dados no KV Store:</p>
+                    <div className="space-y-1 text-sm">
+                      <p><strong>Nome:</strong> {resultado.kvUser?.nome}</p>
+                      <p><strong>Perfil:</strong> {resultado.kvUser?.perfil}</p>
+                      <p><strong>Secretaria:</strong> {resultado.kvUser?.secretaria}</p>
+                      <p><strong>Situação:</strong> {resultado.kvUser?.situacao}</p>
+                    </div>
+                  </div>
+                  
+                  {resultado.credentials && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-blue-900 font-medium mb-2">🔑 Credenciais de Login:</p>
+                      <div className="space-y-1 text-sm">
+                        <p><strong>Email:</strong> <code className="bg-white px-2 py-1 rounded">{resultado.credentials.email}</code></p>
+                        <p><strong>Senha:</strong> <code className="bg-white px-2 py-1 rounded">{resultado.credentials.password}</code></p>
+                      </div>
+                      <div className="mt-3 p-2 bg-blue-100 rounded">
+                        <p className="text-blue-900 text-sm font-medium">
+                          {resultado.loginTest?.success 
+                            ? '✅ Teste de login passou! Você pode fazer login agora.' 
+                            : '⚠️ Teste de login: ' + (resultado.loginTest?.error || 'Não testado')}
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>

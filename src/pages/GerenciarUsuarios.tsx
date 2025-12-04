@@ -3,10 +3,9 @@ import { Search, Edit, UserX, UserCheck, UserPlus, Loader, Clock, CheckCircle, X
 import { usuarios as usuariosAPI } from '../utils/api';
 import { toast } from 'sonner@2.0.3';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
-import { MeuPerfil } from '../components/MeuPerfil';
 
 export function GerenciarUsuarios() {
-  const [activeTab, setActiveTab] = useState<'admin' | 'gestor' | 'fiscal' | 'secretarias' | 'solicitacoes' | 'perfil'>('admin');
+  const [activeTab, setActiveTab] = useState<'admin' | 'gestor' | 'fiscal' | 'secretarias' | 'solicitacoes'>('admin');
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAprovarModal, setShowAprovarModal] = useState(false);
@@ -26,18 +25,21 @@ export function GerenciarUsuarios() {
     email: '',
     perfil: '',
     secretaria: '',
-    situacao: ''
+    situacao: '',
+    dataAdmissao: ''
   });
   const [createForm, setCreateForm] = useState({
     nome: '',
     email: '',
     password: '',
     perfil: 'gestor',
-    secretaria: ''
+    secretaria: '',
+    dataAdmissao: ''
   });
   const [aprovarForm, setAprovarForm] = useState({
     perfil: 'gestor',
-    observacoes: ''
+    observacoes: '',
+    dataAdmissao: ''
   });
   const [rejeitarForm, setRejeitarForm] = useState({
     observacoes: ''
@@ -116,7 +118,6 @@ export function GerenciarUsuarios() {
   };
 
   const tabs = [
-    { id: 'perfil' as const, label: 'Meu Perfil', count: null },
     { id: 'admin' as const, label: 'Administradores (CGM)', count: countByPerfil.admin },
     { id: 'gestor' as const, label: 'Gestores de Contratos', count: countByPerfil.gestor },
     { id: 'fiscal' as const, label: 'Fiscais de Contratos', count: countByPerfil.fiscal },
@@ -205,7 +206,8 @@ export function GerenciarUsuarios() {
       email: usuario.email,
       perfil: usuario.perfil,
       secretaria: usuario.secretaria,
-      situacao: usuario.situacao
+      situacao: usuario.situacao,
+      dataAdmissao: usuario.dataAdmissao || ''
     });
     setShowEditModal(true);
   };
@@ -322,6 +324,11 @@ export function GerenciarUsuarios() {
       toast.error('Por favor, selecione a secretaria do usuário.');
       return;
     }
+    
+    if ((createForm.perfil === 'gestor' || createForm.perfil === 'fiscal') && !createForm.dataAdmissao) {
+      toast.error('Por favor, preencha a data de admissão do ' + (createForm.perfil === 'gestor' ? 'gestor' : 'fiscal') + '.');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -346,14 +353,20 @@ export function GerenciarUsuarios() {
         email: '',
         password: '',
         perfil: 'gestor',
-        secretaria: ''
+        secretaria: '',
+        dataAdmissao: ''
       });
     }
   };
 
   const handleAprovarSolicitacao = async () => {
     if (!aprovarForm.perfil) {
-      alert('Por favor, selecione o perfil do usuário.');
+      toast.error('Por favor, selecione o perfil do usuário.');
+      return;
+    }
+    
+    if ((aprovarForm.perfil === 'gestor' || aprovarForm.perfil === 'fiscal') && !aprovarForm.dataAdmissao) {
+      toast.error('Por favor, preencha a data de admissão do ' + (aprovarForm.perfil === 'gestor' ? 'gestor' : 'fiscal') + '.');
       return;
     }
 
@@ -379,7 +392,8 @@ export function GerenciarUsuarios() {
       setSelectedSolicitacao(null);
       setAprovarForm({
         perfil: 'gestor',
-        observacoes: ''
+        observacoes: '',
+        dataAdmissao: ''
       });
     }
   };
@@ -490,6 +504,40 @@ export function GerenciarUsuarios() {
       toast.error('Erro ao carregar secretarias: ' + error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resetarSecretarias = async () => {
+    if (!confirm('Tem certeza que deseja resetar todas as secretarias? Isto irá deletar todas as secretarias existentes e recriar as 15 secretarias padrão do município.')) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      console.log('🔄 Resetando secretarias...');
+      
+      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-1a8b02da/resetar-secretarias`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${publicAnonKey}`
+        }
+      });
+
+      const data = await response.json();
+      console.log('📥 Resposta:', data);
+
+      if (data.success) {
+        toast.success(`Secretarias resetadas! ${data.secretariasCriadas} secretarias criadas.`);
+        await carregarSecretarias();
+      } else {
+        toast.error('Erro ao resetar secretarias: ' + data.error);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao resetar secretarias:', error);
+      toast.error('Erro ao resetar secretarias: ' + error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -668,9 +716,6 @@ export function GerenciarUsuarios() {
             <Loader className="size-8 animate-spin text-[#0b6b3a]" />
             <span className="ml-3 text-gray-600">Carregando usuários...</span>
           </div>
-        ) : activeTab === 'perfil' ? (
-          // Componente de perfil do usuário
-          <MeuPerfil />
         ) : activeTab === 'solicitacoes' ? (
           // Tabela de solicitações
           solicitacoes.length === 0 ? (
@@ -872,12 +917,21 @@ export function GerenciarUsuarios() {
                 <span className="text-gray-600 text-sm">
                   Mostrando {secretarias.length} de {secretarias.length} secretarias
                 </span>
-                <button
-                  className="px-4 py-2 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium"
-                  onClick={() => setShowSecretariaModal(true)}
-                >
-                  Nova secretaria
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    className="px-4 py-2 bg-orange-600 text-white rounded-md text-sm hover:bg-orange-700 font-medium disabled:opacity-50"
+                    onClick={resetarSecretarias}
+                    disabled={saving}
+                  >
+                    {saving ? 'Resetando...' : 'Resetar Secretarias'}
+                  </button>
+                  <button
+                    className="px-4 py-2 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium"
+                    onClick={() => setShowSecretariaModal(true)}
+                  >
+                    Nova secretaria
+                  </button>
+                </div>
               </div>
             </>
           )
@@ -903,6 +957,11 @@ export function GerenciarUsuarios() {
                     <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
                       Secretaria / Órgão
                     </th>
+                    {(activeTab === 'gestor' || activeTab === 'fiscal') && (
+                      <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
+                        Data de Admissão
+                      </th>
+                    )}
                     <th className="px-4 py-3 text-left text-gray-600 text-sm font-medium">
                       Situação
                     </th>
@@ -929,6 +988,11 @@ export function GerenciarUsuarios() {
                       <td className="px-4 py-3 text-gray-600 text-sm">
                         {usuario.secretaria}
                       </td>
+                      {(activeTab === 'gestor' || activeTab === 'fiscal') && (
+                        <td className="px-4 py-3 text-gray-600 text-sm">
+                          {usuario.dataAdmissao ? new Date(usuario.dataAdmissao).toLocaleDateString('pt-BR') : '-'}
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         {getSituacaoBadge(usuario.situacao)}
                       </td>
@@ -1046,6 +1110,23 @@ export function GerenciarUsuarios() {
                   <option>Inativo</option>
                 </select>
               </div>
+
+              {(editForm.perfil === 'gestor' || editForm.perfil === 'fiscal') && (
+                <div className="mb-4">
+                  <label className="block text-gray-600 text-sm mb-1 font-medium">
+                    Data de Admissão
+                  </label>
+                  <input
+                    type="date"
+                    value={editForm.dataAdmissao}
+                    onChange={(e) => setEditForm({ ...editForm, dataAdmissao: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">
+                    Data em que o {editForm.perfil === 'gestor' ? 'gestor' : 'fiscal'} foi admitido no cargo
+                  </p>
+                </div>
+              )}
               
               <div className="flex justify-end">
                 <button
@@ -1142,6 +1223,23 @@ export function GerenciarUsuarios() {
                   <option value="fiscal">Fiscal de Contratos</option>
                 </select>
               </div>
+
+              {(createForm.perfil === 'gestor' || createForm.perfil === 'fiscal') && (
+                <div className="mb-4">
+                  <label className="block text-gray-600 text-sm mb-1 font-medium">
+                    Data de Admissão *
+                  </label>
+                  <input
+                    type="date"
+                    value={createForm.dataAdmissao}
+                    onChange={(e) => setCreateForm({ ...createForm, dataAdmissao: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">
+                    Data em que o {createForm.perfil === 'gestor' ? 'gestor' : 'fiscal'} foi admitido no cargo
+                  </p>
+                </div>
+              )}
               
               <div className="flex justify-end">
                 <button
@@ -1225,6 +1323,23 @@ export function GerenciarUsuarios() {
                   A senha foi definida pelo usuário durante a solicitação
                 </p>
               </div>
+
+              {(aprovarForm.perfil === 'gestor' || aprovarForm.perfil === 'fiscal') && (
+                <div className="mb-4">
+                  <label className="block text-gray-600 text-sm mb-1 font-medium">
+                    Data de Admissão *
+                  </label>
+                  <input
+                    type="date"
+                    value={aprovarForm.dataAdmissao}
+                    onChange={(e) => setAprovarForm({ ...aprovarForm, dataAdmissao: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm"
+                  />
+                  <p className="text-gray-500 text-xs mt-1">
+                    Data em que o {aprovarForm.perfil === 'gestor' ? 'gestor' : 'fiscal'} foi admitido no cargo
+                  </p>
+                </div>
+              )}
               
               <div className="mb-4">
                 <label className="block text-gray-600 text-sm mb-1 font-medium">

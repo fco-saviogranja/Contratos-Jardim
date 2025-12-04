@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { HelpCircle, Menu, X, LogOut } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { HelpCircle, Menu, X, LogOut, User, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { usuarios as usuariosAPI } from '../../utils/api';
@@ -11,10 +11,30 @@ interface HeaderProps {
 
 export function Header({ onNavigate }: HeaderProps) {
   const { user, logout } = useAuth();
-  const [fotoPerfil, setFotoPerfil] = useState<string>('');
+  const [fotoPerfil, setFotoPerfil] = useState<string>(user?.fotoPerfil || '');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Fechar menu ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
+    // Inicializar com a foto do usuário do contexto
+    if (user?.fotoPerfil) {
+      setFotoPerfil(user.fotoPerfil);
+    }
+    
+    // Carregar foto atualizada do backend
     carregarFotoPerfil();
     
     // Listener para atualizar foto quando houver mudança
@@ -34,8 +54,17 @@ export function Header({ onNavigate }: HeaderProps) {
       if (!user) return;
       
       const response = await usuariosAPI.getMe();
-      if (response.success && response.usuario?.fotoPerfil) {
-        setFotoPerfil(response.usuario.fotoPerfil);
+      if (response.success && response.usuario) {
+        // Atualizar foto no estado local
+        setFotoPerfil(response.usuario.fotoPerfil || '');
+        
+        // IMPORTANTE: Atualizar localStorage com dados completos do usuário
+        // Isso garante que na próxima vez que o usuário fizer login, a foto estará lá
+        const usuarioAtualizado = {
+          ...user,
+          ...response.usuario
+        };
+        localStorage.setItem('user', JSON.stringify(usuarioAtualizado));
       } else {
         // Limpar foto se não houver
         setFotoPerfil('');
@@ -45,6 +74,12 @@ export function Header({ onNavigate }: HeaderProps) {
       // Não mostra erro para o usuário, apenas não exibe a foto
       setFotoPerfil('');
     }
+  };
+
+  const handleMeuPerfil = () => {
+    setShowProfileMenu(false);
+    setShowMobileMenu(false);
+    onNavigate('meu-perfil');
   };
 
   return (
@@ -77,41 +112,60 @@ export function Header({ onNavigate }: HeaderProps) {
             <span className="hidden lg:inline">Ajuda</span>
           </button>
           
-          <div className="bg-[#e9f7ee] rounded-lg px-2 lg:px-2.5 py-1.5 flex items-center gap-2">
-            <div className="size-6 rounded-full bg-gradient-to-br from-[#102a43] to-[#243b53] flex items-center justify-center text-white text-xs font-medium overflow-hidden">
-              {fotoPerfil ? (
-                <img 
-                  src={fotoPerfil} 
-                  alt={user?.nome || 'Usuário'} 
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span>{user?.nome?.charAt(0)?.toUpperCase() || 'U'}</span>
-              )}
-            </div>
-            <div className="hidden lg:flex flex-col">
-              <span className="text-[#0b6b3a] text-sm">
-                {user?.nome}
-              </span>
-              <span className="text-gray-600 text-xs">
-                {user?.perfil === 'admin' ? 'Administrador (CGM)' : 
-                 user?.perfil === 'gestor' ? 'Gestor de Contratos' : 
-                 'Fiscal de Contratos'}
-              </span>
-            </div>
+          {/* Profile Dropdown */}
+          <div className="relative" ref={profileMenuRef}>
             <button
-              onClick={logout}
-              className="text-[#0b6b3a] text-sm hover:underline hidden lg:block"
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="bg-[#e9f7ee] rounded-lg px-2 lg:px-2.5 py-1.5 flex items-center gap-2 hover:bg-[#d9ede0] transition-colors"
             >
-              Sair
+              <div className="size-6 rounded-full bg-gradient-to-br from-[#102a43] to-[#243b53] flex items-center justify-center text-white text-xs font-medium overflow-hidden">
+                {fotoPerfil ? (
+                  <img 
+                    src={fotoPerfil} 
+                    alt={user?.nome || 'Usuário'} 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{user?.nome?.charAt(0)?.toUpperCase() || 'U'}</span>
+                )}
+              </div>
+              <div className="hidden lg:flex flex-col items-start">
+                <span className="text-[#0b6b3a] text-sm">
+                  {user?.nome}
+                </span>
+                <span className="text-gray-600 text-xs">
+                  {user?.perfil === 'admin' || user?.perfil === 'Administrador CGM' ? 'Administrador (CGM)' : 
+                   user?.perfil === 'gestor' || user?.perfil === 'Gestor de Contratos' ? 'Gestor de Contratos' : 
+                   user?.perfil === 'fiscal' || user?.perfil === 'Fiscal de Contratos' ? 'Fiscal de Contratos' :
+                   user?.perfil || 'Usuário'}
+                </span>
+              </div>
+              <ChevronDown className="size-4 text-[#0b6b3a] hidden lg:block" />
             </button>
-            <button
-              onClick={logout}
-              className="text-[#0b6b3a] lg:hidden p-1"
-              title="Sair"
-            >
-              <LogOut className="size-4" />
-            </button>
+
+            {/* Dropdown Menu */}
+            {showProfileMenu && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                <button
+                  onClick={handleMeuPerfil}
+                  className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-gray-700 text-sm transition-colors"
+                >
+                  <User className="size-4" />
+                  <div>
+                    <div className="font-medium">Meu Perfil</div>
+                    <div className="text-xs text-gray-500">Gerenciar informações pessoais</div>
+                  </div>
+                </button>
+                <div className="border-t border-gray-100 my-1"></div>
+                <button
+                  onClick={logout}
+                  className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-red-600 text-sm transition-colors"
+                >
+                  <LogOut className="size-4" />
+                  <span>Sair do sistema</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -145,13 +199,22 @@ export function Header({ onNavigate }: HeaderProps) {
                   {user?.nome}
                 </span>
                 <span className="text-[#e6f7ee]/70 text-xs">
-                  {user?.perfil === 'admin' ? 'Administrador (CGM)' : 
-                   user?.perfil === 'gestor' ? 'Gestor de Contratos' : 
-                   'Fiscal de Contratos'}
+                  {user?.perfil === 'admin' || user?.perfil === 'Administrador CGM' ? 'Administrador (CGM)' : 
+                   user?.perfil === 'gestor' || user?.perfil === 'Gestor de Contratos' ? 'Gestor de Contratos' : 
+                   user?.perfil === 'fiscal' || user?.perfil === 'Fiscal de Contratos' ? 'Fiscal de Contratos' :
+                   user?.perfil || 'Usuário'}
                 </span>
               </div>
             </div>
             
+            <button
+              onClick={handleMeuPerfil}
+              className="w-full text-left text-[#e6f7ee] text-sm py-2 px-3 rounded hover:bg-[#0a4e33] flex items-center gap-2"
+            >
+              <User className="size-4" />
+              Meu Perfil
+            </button>
+
             <button
               onClick={() => {
                 onNavigate('ajuda');

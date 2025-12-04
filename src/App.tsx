@@ -7,6 +7,7 @@ import { Dashboard } from './pages/Dashboard';
 import { TodosContratos } from './pages/TodosContratos';
 import { CadastroContrato } from './pages/CadastroContrato';
 import { GerenciarUsuarios } from './pages/GerenciarUsuarios';
+import { MeuPerfil } from './pages/MeuPerfil';
 import { AlertasPrazos } from './pages/AlertasPrazos';
 import { Relatorios } from './pages/Relatorios';
 import { ParametrosPerfis } from './pages/ParametrosPerfis';
@@ -14,24 +15,47 @@ import { AparenciaLayout } from './pages/AparenciaLayout';
 import { ConfiguracoesGerais } from './pages/ConfiguracoesGerais';
 import { Ajuda } from './pages/Ajuda';
 import { Diagnostico } from './pages/Diagnostico';
+import { DiagnosticoAvancado } from './pages/DiagnosticoAvancado';
 import { LimparSistema } from './pages/LimparSistema';
 import { Toaster } from 'sonner@2.0.3';
 
 // Utilitários globais disponíveis no console
 import './utils/limparDados.js';
-import './utils/diagnostico.tsx';
+import './utils/diagnostico.ts';
 import './utils/limparTodosUsuarios.js';
-import './utils/testarConexao.tsx';
-import './utils/verificarConfig.tsx';
+import './utils/testarConexao.ts';
+import './utils/verificarConfig.ts';
+import './utils/verificarPerfil.ts';
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, checkSession, logout } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [showSolicitarAcesso, setShowSolicitarAcesso] = useState(false);
+
+  // Verificar sessão periodicamente
+  React.useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Verificar a cada 30 segundos se a sessão ainda é válida
+    const interval = setInterval(() => {
+      const isValid = checkSession();
+      if (!isValid) {
+        console.warn('⚠️ [APP] Sessão inválida detectada - redirecionando para login');
+        logout();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated, checkSession, logout]);
 
   // Verificar se está acessando a página de diagnóstico
   if (window.location.pathname === '/diagnostico') {
     return <Diagnostico />;
+  }
+
+  // Verificar se está acessando a página de diagnóstico avançado
+  if (window.location.pathname === '/diagnostico-avancado') {
+    return <DiagnosticoAvancado />;
   }
 
   // Verificar se está acessando a página de limpar sistema
@@ -61,6 +85,8 @@ function AppContent() {
         return <Relatorios />;
       case 'usuarios':
         return <GerenciarUsuarios />;
+      case 'meu-perfil':
+        return <MeuPerfil />;
       case 'parametros':
         return <ParametrosPerfis />;
       case 'aparencia':

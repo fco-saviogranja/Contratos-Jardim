@@ -1,282 +1,285 @@
-# ✅ CHECKLIST DE DEPLOY - ContratosJardim
+# ✅ CHECKLIST DE DEPLOY - CONTRATOSJARDIM
 
-Use este checklist para garantir que tudo está configurado corretamente.
-
----
-
-## 📋 **PRÉ-REQUISITOS**
-
-- [ ] Node.js instalado (v16 ou superior)
-- [ ] NPM ou Yarn instalado
-- [ ] Conta no Supabase criada
-- [ ] Projeto Supabase criado (ID: `yxxkishjqjsoxcjlqdrk`)
+Use este checklist para garantir que o deploy seja feito corretamente.
 
 ---
 
-## 🔧 **CONFIGURAÇÃO INICIAL**
+## 📋 PRÉ-DEPLOY
 
-### **Credenciais do Supabase:**
-- [ ] Project URL configurada: `https://yxxkishjqjsoxcjlqdrk.supabase.co`
-- [ ] Project ID configurado: `yxxkishjqjsoxcjlqdrk`
-- [ ] Anon Key configurada no arquivo `/utils/supabase/info.tsx`
+- [ ] **Código backend atualizado**
+  - Arquivo: `/supabase/functions/server/index.tsx`
+  - Verificar se contém `initializeBucket()` na linha 38
+  - Verificar se contém `BUCKET_NAME = 'make-1a8b02da-fotos-perfil'`
+  - Verificar se rota `/usuarios/me/foto` usa Storage (não base64)
 
-### **Arquivos do Sistema:**
-- [ ] `/utils/api.tsx` atualizado para usar backend Supabase
-- [ ] `/utils/supabase/client.tsx` criado
-- [ ] `/supabase/functions/server/index.tsx` existe
-- [ ] `/supabase/functions/server/kv_store.tsx` existe (NÃO EDITAR)
-- [ ] `/components/OfflineBanner.tsx` foi deletado
-
----
-
-## 🚀 **DEPLOY DO SERVIDOR**
-
-### **1. Instalar Supabase CLI:**
-```bash
-npm install -g supabase
-```
-- [ ] CLI instalado com sucesso
-- [ ] Versão verificada com `supabase --version`
-
-### **2. Login no Supabase:**
-```bash
-supabase login
-```
-- [ ] Login realizado com sucesso
-- [ ] Navegador abriu para autenticação
-
-### **3. Linkar Projeto:**
-```bash
-supabase link --project-ref yxxkishjqjsoxcjlqdrk
-```
-- [ ] Projeto linkado com sucesso
-- [ ] Senha do banco fornecida (se solicitado)
-
-### **4. Deploy da Edge Function:**
-```bash
-supabase functions deploy make-server-1a8b02da
-```
-- [ ] Deploy concluído sem erros
-- [ ] Mensagem de sucesso exibida
-- [ ] Aguardado 1-2 minutos para propagar
-
-### **5. Verificar Deploy:**
-
-Abra no navegador:
-```
-https://yxxkishjqjsoxcjlqdrk.supabase.co/functions/v1/make-server-1a8b02da/health
-```
-
-- [ ] Retornou JSON com `"status": "ok"`
-- [ ] Timestamp presente
+- [ ] **Acesso ao Supabase**
+  - Login em: https://supabase.com/dashboard
+  - Projeto: `wdkgxmwnacmzdfcvrofe`
+  - Acesso confirmado
 
 ---
 
-## 🗄️ **CONFIGURAÇÃO DO BANCO DE DADOS**
+## 🚀 DEPLOY DA EDGE FUNCTION
 
-### **Criar Tabela KV Store:**
+### Opção 1: Via Dashboard (Recomendado)
 
-1. Acesse: https://supabase.com/dashboard/project/yxxkishjqjsoxcjlqdrk/sql
+- [ ] **Acessar Dashboard**
+  - URL: https://supabase.com/dashboard/project/wdkgxmwnacmzdfcvrofe
+  - Menu: "Edge Functions"
 
-2. Execute o SQL:
-```sql
-CREATE TABLE kv_store_1a8b02da (
-  key TEXT NOT NULL PRIMARY KEY,
-  value JSONB NOT NULL
-);
-```
+- [ ] **Localizar função**
+  - Procurar: `make-server-1a8b02da`
+  - Se não existir, criar nova função
 
-**Checklist:**
-- [ ] SQL executado sem erros
-- [ ] Tabela aparece em: Database → Tables
-- [ ] Tabela tem 2 colunas: `key` e `value`
+- [ ] **Fazer deploy**
+  - Copiar TODO o conteúdo de `/supabase/functions/server/index.tsx`
+  - Colar no editor
+  - Clicar em "Deploy"
+  - Aguardar conclusão (10-30 segundos)
+
+- [ ] **Verificar sucesso**
+  - Mensagem de sucesso exibida
+  - Status da função: "Active"
+
+### Opção 2: Via CLI
+
+- [ ] **Instalar CLI**
+  ```bash
+  npm install -g supabase
+  ```
+
+- [ ] **Login**
+  ```bash
+  supabase login
+  ```
+
+- [ ] **Link projeto**
+  ```bash
+  supabase link --project-ref wdkgxmwnacmzdfcvrofe
+  ```
+
+- [ ] **Deploy**
+  ```bash
+  supabase functions deploy make-server-1a8b02da --no-verify-jwt
+  ```
+
+- [ ] **Verificar**
+  ```bash
+  supabase functions list
+  ```
 
 ---
 
-## 🎯 **PRIMEIRO ACESSO**
+## 🧪 TESTES PÓS-DEPLOY
 
-### **Setup do Sistema:**
-1. Acesse o sistema ContratosJardim
-2. Clique em "Configurar Sistema (Setup Inicial)"
-3. Clique em "Criar administrador e iniciar sistema"
+### 1. Health Check
 
-**Checklist:**
-- [ ] Página de setup carregou
-- [ ] Botão de criar administrador funcionou
-- [ ] Mensagem de sucesso exibida
-- [ ] Credenciais mostradas na tela
+- [ ] **Testar endpoint**
+  - Abrir navegador
+  - URL: `https://wdkgxmwnacmzdfcvrofe.supabase.co/functions/v1/make-server-1a8b02da/health`
+  - Resposta esperada:
+    ```json
+    {
+      "status": "ok",
+      "service": "ContratosJardim Backend",
+      "version": "2.0.0"
+    }
+    ```
 
-### **Credenciais do Administrador:**
+### 2. Verificar Bucket
+
+- [ ] **Acessar Storage**
+  - Dashboard → "Storage"
+  - Procurar bucket: `make-1a8b02da-fotos-perfil`
+  - Se não existir, aguardar 30 segundos e recarregar
+
+- [ ] **Verificar configurações**
+  - Tipo: Privado ✅
+  - Limite: 5MB ✅
+
+### 3. Setup Administrador
+
+- [ ] **Criar admin principal**
+  - Opção A: Via Diagnóstico Avançado no sistema
+  - Opção B: POST para `/auth/setup-admin`
+  
+- [ ] **Verificar criação**
+  - Email: `controleinterno@jardim.ce.gov.br`
+  - Senha: `@Gustavo25`
+
+### 4. Testar Login
+
+- [ ] **Fazer login**
+  - Abrir sistema
+  - Email: `controleinterno@jardim.ce.gov.br`
+  - Senha: `@Gustavo25`
+  - Login bem-sucedido ✅
+
+### 5. Testar Upload de Foto
+
+- [ ] **Ir para perfil**
+  - Clicar no avatar/nome do usuário
+  - Ir para "Meu Perfil"
+
+- [ ] **Fazer upload**
+  - Selecionar uma foto (JPG, PNG)
+  - Tamanho: até 5MB
+  - Clicar em "Salvar"
+
+- [ ] **Verificar sucesso**
+  - Foto exibida no perfil ✅
+  - Sem erro de "10.240 characters" ✅
+  - URL da foto começa com `https://...supabase.co/storage/...` ✅
+
+- [ ] **Verificar Storage**
+  - Dashboard → Storage → `make-1a8b02da-fotos-perfil` → `perfil/`
+  - Ver arquivo da foto ✅
+
+### 6. Testar Segunda Foto (Limpeza)
+
+- [ ] **Fazer upload de nova foto**
+  - Selecionar foto diferente
+  - Clicar em "Salvar"
+
+- [ ] **Verificar limpeza**
+  - Nova foto exibida ✅
+  - Foto antiga deletada do Storage ✅
+  - Apenas 1 foto por usuário no Storage ✅
+
+---
+
+## 📊 MONITORAMENTO
+
+### Logs do Backend
+
+- [ ] **Acessar logs**
+  - Dashboard → Edge Functions → `make-server-1a8b02da` → "Logs"
+
+- [ ] **Verificar mensagens**
+  - `✅ [STORAGE] Bucket já existe` ou `✅ [STORAGE] Bucket criado`
+  - `📸 [UPLOAD-FOTO] Upload de foto para usuário: ...`
+  - `🗑️ [UPLOAD-FOTO] Deletando foto anterior: ...`
+  - `✅ [UPLOAD-FOTO] Foto salva com sucesso: ...`
+
+### Diagnóstico Avançado
+
+- [ ] **Executar diagnóstico**
+  - Ir para "Diagnóstico Avançado"
+  - Executar todos os testes
+  - Verificar status: 38/38 rotas funcionando ✅
+
+---
+
+## 🔧 TROUBLESHOOTING
+
+### ❌ Health check não funciona
+
+**Possíveis causas:**
+- [ ] Edge Function não deployada
+- [ ] Nome da função incorreto
+- [ ] URL incorreta
+
+**Solução:**
+1. Refazer deploy
+2. Verificar nome exato: `make-server-1a8b02da`
+3. Aguardar 1 minuto após deploy
+
+---
+
+### ❌ Bucket não aparece
+
+**Possíveis causas:**
+- [ ] Edge Function não foi executada ainda
+- [ ] Erro na inicialização
+
+**Solução:**
+1. Fazer qualquer requisição para a Edge Function (health check)
+2. Aguardar 30 segundos
+3. Recarregar página do Storage
+4. Ver logs para mensagens de erro
+
+---
+
+### ❌ Upload de foto falha
+
+**Possíveis causas:**
+- [ ] Bucket não existe
+- [ ] Foto muito grande (>5MB)
+- [ ] Token expirado
+
+**Solução:**
+1. Verificar se bucket existe
+2. Redimensionar foto para <5MB
+3. Fazer logout e login novamente
+4. Verificar logs do backend
+
+---
+
+### ❌ Foto antiga não é deletada
+
+**Possíveis causas:**
+- [ ] Código antigo ainda deployado
+- [ ] Erro de permissão
+
+**Solução:**
+1. Verificar se código novo está deployado
+2. Ver logs para mensagens de erro
+3. Verificar permissões do bucket
+
+---
+
+## 📝 NOTAS IMPORTANTES
+
+### Credenciais Padrão
 ```
-E-mail: controleinterno@jardim.ce.gov.br
+Email: controleinterno@jardim.ce.gov.br
 Senha: @Gustavo25
+Perfil: Administrador CGM
 ```
-- [ ] E-mail e senha anotados
+
+### URLs Importantes
+```
+Dashboard: https://supabase.com/dashboard/project/wdkgxmwnacmzdfcvrofe
+Health Check: https://wdkgxmwnacmzdfcvrofe.supabase.co/functions/v1/make-server-1a8b02da/health
+Edge Function: make-server-1a8b02da
+Bucket: make-1a8b02da-fotos-perfil
+```
+
+### Limites
+```
+Foto máxima: 5MB
+URL assinada válida por: 1 ano
+Formato: JPG, PNG
+```
 
 ---
 
-## 🔐 **TESTE DE LOGIN**
+## ✅ CONCLUSÃO
 
-### **Fazer Login:**
-1. Vá para a tela de login
-2. Digite e-mail: `controleinterno@jardim.ce.gov.br`
-3. Digite senha: `@Gustavo25`
-4. Clique em "Entrar"
+Quando todos os itens acima estiverem marcados ✅, o sistema estará:
 
-**Checklist:**
-- [ ] Login bem-sucedido
-- [ ] Dashboard carregou
-- [ ] Nome do usuário aparece no header
-- [ ] Menu lateral funcionando
+- ✅ Deployado corretamente
+- ✅ Backend funcionando
+- ✅ Storage configurado
+- ✅ Upload de fotos operacional
+- ✅ Limpeza automática ativa
+- ✅ Pronto para uso em produção!
 
 ---
 
-## 🧪 **TESTES FUNCIONAIS**
+## 🎉 PRÓXIMOS PASSOS
 
-### **Dashboard:**
-- [ ] Estatísticas carregando
-- [ ] Cards mostrando números zerados (normal no início)
-- [ ] Gráficos renderizando
+Após deploy bem-sucedido:
 
-### **Contratos:**
-- [ ] Página "Todos os Contratos" abre
-- [ ] Botão "Novo Contrato" funciona
-- [ ] Formulário de cadastro aparece
-
-### **Usuários:**
-- [ ] Página "Gerenciar Usuários" abre
-- [ ] Administrador aparece na lista
-- [ ] Botão "Novo Usuário" funciona
-
-### **Solicitações:**
-- [ ] Página pública "Solicitar Acesso" funciona
-- [ ] Formulário envia solicitação
-- [ ] Admin consegue ver solicitações
-
-### **Secretarias:**
-- [ ] Lista de secretarias carrega (10 padrões)
-- [ ] Pode adicionar nova secretaria
-- [ ] Pode editar secretaria existente
+1. Criar usuários adicionais via "Gerenciar Usuários"
+2. Cadastrar secretarias
+3. Começar a cadastrar contratos
+4. Configurar alertas automáticos
+5. Treinar equipe
 
 ---
 
-## 🔍 **VERIFICAÇÃO DE LOGS**
-
-### **Console do Navegador (F12):**
-- [ ] Sem erros em vermelho
-- [ ] Logs com emojis aparecem (🔑, 📋, etc)
-- [ ] Requisições bem-sucedidas (200 OK)
-
-### **Logs do Supabase:**
-
-Acesse: https://supabase.com/dashboard/project/yxxkishjqjsoxcjlqdrk/logs/edge-functions
-
-- [ ] Logs da função `make-server-1a8b02da` aparecem
-- [ ] Sem erros 500
-- [ ] Requisições registradas
-
-### **Database:**
-
-Acesse: https://supabase.com/dashboard/project/yxxkishjqjsoxcjlqdrk/database/tables
-
-- [ ] Tabela `kv_store_1a8b02da` existe
-- [ ] Tem dados (chaves começando com `user:`, `secretaria:`, etc)
-- [ ] Queries funcionando
-
----
-
-## 🔒 **SEGURANÇA**
-
-### **Após Primeiro Acesso:**
-- [ ] Alterar senha do administrador
-- [ ] Criar outros usuários admin (se necessário)
-- [ ] Revisar permissões de perfis
-
-### **Configurações Supabase:**
-- [ ] RLS (Row Level Security) desabilitado na tabela KV (normal)
-- [ ] Emails de autenticação configurados (opcional)
-- [ ] Rate limiting ativado (opcional)
-
----
-
-## 📱 **TESTES DE INTEGRAÇÃO**
-
-### **Fluxo Completo:**
-
-1. **Solicitação de Acesso:**
-   - [ ] Usuário solicita acesso na página pública
-   - [ ] Admin recebe solicitação
-   - [ ] Admin aprova
-   - [ ] Novo usuário consegue fazer login
-
-2. **Cadastro de Contrato:**
-   - [ ] Gestor cria novo contrato
-   - [ ] Contrato aparece na lista
-   - [ ] Detalhes podem ser editados
-   - [ ] Contrato pode ser deletado
-
-3. **Alertas:**
-   - [ ] Criar contrato com vencimento próximo
-   - [ ] Alerta aparece no painel
-   - [ ] Prioridade correta (crítico/médio/baixo)
-
----
-
-## 🎉 **CHECKLIST FINAL**
-
-- [ ] ✅ Servidor no ar e respondendo
-- [ ] ✅ Banco de dados criado e funcionando
-- [ ] ✅ Administrador criado e testado
-- [ ] ✅ Login funcionando
-- [ ] ✅ Dashboard carregando
-- [ ] ✅ CRUD de contratos funcionando
-- [ ] ✅ Gestão de usuários funcionando
-- [ ] ✅ Solicitações de acesso funcionando
-- [ ] ✅ Logs sem erros críticos
-- [ ] ✅ Senha do admin alterada
-
----
-
-## 📞 **SE ALGO FALHAR:**
-
-### **Erros Comuns:**
-
-**❌ "Failed to fetch"**
-- Servidor não está rodando
-- CORS bloqueado
-- URL incorreta
-
-**❌ "Unauthorized" (401)**
-- Token expirado
-- Fazer logout e login novamente
-
-**❌ "Not Found" (404)**
-- Edge Function não foi implantada
-- Nome da rota incorreto
-
-**❌ "Internal Server Error" (500)**
-- Erro no código do servidor
-- Verificar logs do Supabase
-
----
-
-## 🏁 **PRÓXIMOS PASSOS**
-
-Após todos os itens checados:
-
-1. [ ] Documentar senha do admin em local seguro
-2. [ ] Criar usuários para gestores e fiscais
-3. [ ] Cadastrar secretarias adicionais (se necessário)
-4. [ ] Cadastrar primeiros contratos
-5. [ ] Configurar alertas de vencimento
-6. [ ] Treinar usuários no sistema
-
----
-
-**🎊 PARABÉNS! Sistema pronto para uso! 🎊**
-
----
-
-**Data do deploy:** _________________  
-**Responsável:** _________________  
-**Status:** ☐ Em andamento  ☐ Concluído  ☐ Com problemas
+**Data do Checklist:** 03/12/2024  
+**Sistema:** ContratosJardim  
+**Versão:** 2.0.0  
+**Status:** Pronto para deploy  

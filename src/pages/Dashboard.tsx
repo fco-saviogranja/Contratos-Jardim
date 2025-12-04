@@ -33,6 +33,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { secretarias } = useSecretarias();
+  const [filtrosAtivos, setFiltrosAtivos] = useState({
+    periodo: '90',
+    secretaria: 'todas',
+    gestor: 'todos'
+  });
 
   // Carregar dados da API
   useEffect(() => {
@@ -118,26 +123,81 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   }, []);
 
   const handleLimparFiltros = () => {
-    setFilters({
+    const filtrosPadrao = {
       periodo: '90',
       secretaria: 'todas',
       gestor: 'todos'
-    });
+    };
+    setFilters(filtrosPadrao);
+    setFiltrosAtivos(filtrosPadrao);
   };
 
   const handleAplicarFiltros = () => {
-    // Aqui seria feita a chamada à API com os filtros
-    console.log('Aplicando filtros:', filters);
-    // No futuro: fetchContratos(filters);
+    console.log('✅ Aplicando filtros:', filters);
+    setFiltrosAtivos({ ...filters });
+    
+    // Contar quantos contratos foram filtrados
+    const total = contratos.length;
+    const filtrados = contratos.filter(contrato => {
+      // Mesma lógica de filtro
+      if (filters.periodo !== 'todos') {
+        const diasRestantes = calcularDiasRestantes(contrato.dataFim);
+        const periodoDias = parseInt(filters.periodo);
+        if (diasRestantes > periodoDias) return false;
+      }
+      if (filters.secretaria !== 'todas') {
+        const secretariaSelecionada = secretarias.find(s => s.id === filters.secretaria);
+        if (secretariaSelecionada && contrato.secretaria !== secretariaSelecionada.nome) {
+          return false;
+        }
+      }
+      if (filters.gestor !== 'todos') {
+        if (contrato.gestor !== filters.gestor) return false;
+      }
+      return true;
+    }).length;
+    
+    toast.success(`Filtros aplicados: ${filtrados} de ${total} contratos exibidos`);
   };
 
   // Verificar se há contratos
   const temContratos = contratos.length > 0;
 
-  // Calcular métricas reais baseadas nos contratos
-  const contratosVigentes = contratos.filter(c => c.dataFim && getStatusContrato(c.dataFim) === 'vigente');
-  const contratosEmAlerta = contratos.filter(c => c.dataFim && getStatusContrato(c.dataFim) === 'alerta');
-  const contratosVencidos = contratos.filter(c => c.dataFim && getStatusContrato(c.dataFim) === 'vencido');
+  // Aplicar filtros aos contratos
+  const contratosFiltrados = contratos.filter(contrato => {
+    // Filtro de período (vencimento nos próximos X dias)
+    if (filtrosAtivos.periodo !== 'todos') {
+      const diasRestantes = calcularDiasRestantes(contrato.dataFim);
+      const periodoDias = parseInt(filtrosAtivos.periodo);
+      // Apenas mostrar contratos que vençam dentro do período OU já vencidos
+      if (diasRestantes > periodoDias) {
+        return false;
+      }
+    }
+
+    // Filtro de secretaria
+    if (filtrosAtivos.secretaria !== 'todas') {
+      // Buscar a secretaria pelo ID para pegar o nome
+      const secretariaSelecionada = secretarias.find(s => s.id === filtrosAtivos.secretaria);
+      if (secretariaSelecionada && contrato.secretaria !== secretariaSelecionada.nome) {
+        return false;
+      }
+    }
+
+    // Filtro de gestor
+    if (filtrosAtivos.gestor !== 'todos') {
+      if (contrato.gestor !== filtrosAtivos.gestor) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Calcular métricas reais baseadas nos contratos FILTRADOS
+  const contratosVigentes = contratosFiltrados.filter(c => c.dataFim && getStatusContrato(c.dataFim) === 'vigente');
+  const contratosEmAlerta = contratosFiltrados.filter(c => c.dataFim && getStatusContrato(c.dataFim) === 'alerta');
+  const contratosVencidos = contratosFiltrados.filter(c => c.dataFim && getStatusContrato(c.dataFim) === 'vencido');
   const alertasPendentes = alertas.filter(a => a.status === 'pendente' || !a.status);
 
   // Filtrar contratos próximos do vencimento para a tabela
@@ -365,6 +425,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               <option value="30">Próximos 30 dias</option>
               <option value="60">Próximos 60 dias</option>
               <option value="90">Próximos 90 dias</option>
+              <option value="todos">Todos os períodos</option>
             </select>
           </div>
           <div>
@@ -388,8 +449,10 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
             >
               <option value="todos">Todos</option>
-              <option value="maria">Maria Silva</option>
-              <option value="joao">João Santos</option>
+              {/* Extrair gestores únicos dos contratos */}
+              {Array.from(new Set(contratos.map(c => c.gestor).filter(Boolean))).sort().map((gestor, idx) => (
+                <option key={idx} value={gestor}>{gestor}</option>
+              ))}
             </select>
           </div>
         </div>

@@ -160,6 +160,7 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
   const [linhasParaImportar, setLinhasParaImportar] = useState<any[][]>([]); // TODAS as linhas válidas
   const [ignorarDuplicatas, setIgnorarDuplicatas] = useState(true);
   const [secretariasCadastradasCompletas, setSecretariasCadastradasCompletas] = useState<Array<{ nome: string; sigla: string }>>([]);
+  const [todasAsLinhasOriginais, setTodasAsLinhasOriginais] = useState<any[][]>([]); // Guarda TODAS as linhas do Excel
 
   // Iniciar validação automaticamente quando arquivo for carregado
   useEffect(() => {
@@ -209,6 +210,115 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
 
   const baixarModelo = () => {
     alert('Download do modelo Excel iniciado! O arquivo contém as colunas necessárias e exemplos de preenchimento.');
+  };
+
+  const aplicarMapeamentosERevalidar = () => {
+    console.log('🔄 [MAPEAMENTO] Aplicando mapeamentos e re-validando...');
+    console.log('📋 [MAPEAMENTO] Mapeamentos:', mapeamentos);
+    console.log('📋 [MAPEAMENTO] Total de linhas originais:', todasAsLinhasOriginais.length);
+    
+    const novasLinhasValidas: any[][] = [];
+    const novosErros: string[] = [];
+    let novosValidos = 0;
+    let novosInvalidos = 0;
+    
+    // Re-processar TODAS as linhas originais aplicando os mapeamentos
+    for (let i = 0; i < todasAsLinhasOriginais.length; i++) {
+      const linha = todasAsLinhasOriginais[i];
+      const numeroLinha = i + 2; // +2 porque linha 1 é cabeçalho e Excel começa em 1
+      
+      let secretaria = linha[0] ? String(linha[0]).trim() : '';
+      const contratado = linha[1] ? String(linha[1]).trim() : '';
+      const objeto = linha[2] ? String(linha[2]).trim() : '';
+      const dataFinal = linha[3] ? String(linha[3]).trim() : '';
+      
+      let temErro = false;
+      
+      // Aplicar mapeamento se existir
+      if (secretaria && mapeamentos[secretaria]) {
+        console.log(`  🔄 Aplicando mapeamento: "${secretaria}" → "${mapeamentos[secretaria]}"`);
+        if (mapeamentos[secretaria] === '__NOVA__') {
+          novosErros.push(`Linha ${numeroLinha}: Cadastro de nova secretaria não implementado`);
+          temErro = true;
+        } else {
+          secretaria = mapeamentos[secretaria];
+        }
+      }
+      
+      // Validar campos obrigatórios
+      if (!secretaria) {
+        novosErros.push(`Linha ${numeroLinha}: Secretaria não informada (Coluna A)`);
+        temErro = true;
+      }
+      
+      if (!contratado) {
+        novosErros.push(`Linha ${numeroLinha}: Contratado não informado (Coluna B)`);
+        temErro = true;
+      }
+      
+      if (!objeto) {
+        novosErros.push(`Linha ${numeroLinha}: Objeto não informado (Coluna C)`);
+        temErro = true;
+      }
+      
+      if (!dataFinal) {
+        novosErros.push(`Linha ${numeroLinha}: Data final da vigência não informada (Coluna D)`);
+        temErro = true;
+      } else {
+        // Validar formato de data DD/MM/AAAA
+        const regexData = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+        if (!regexData.test(dataFinal)) {
+          novosErros.push(`Linha ${numeroLinha}: Data final da vigência inválida (formato esperado: DD/MM/AAAA, recebido: "${dataFinal}")`);
+          temErro = true;
+        }
+      }
+      
+      // Com mapeamento aplicado, verificar se secretaria agora existe
+      if (secretaria && !temErro) {
+        const secretariaNormalizada = secretaria.toLowerCase().trim();
+        const secretariasCadastradas = secretariasCadastradasCompletas.map(s => s.nome);
+        
+        // Verificar match exato de NOME
+        const matchNomeExato = secretariasCadastradas.some(s => 
+          s.toLowerCase().trim() === secretariaNormalizada
+        );
+        
+        // Verificar match exato de SIGLA
+        const matchSiglaExata = secretariasCadastradasCompletas.find(s => 
+          s.sigla && s.sigla.toLowerCase().trim() === secretariaNormalizada
+        );
+        
+        if (!matchNomeExato && !matchSiglaExata) {
+          novosErros.push(`Linha ${numeroLinha}: Secretaria "${secretaria}" não encontrada no sistema`);
+          temErro = true;
+        }
+      }
+      
+      if (temErro) {
+        novosInvalidos++;
+      } else {
+        novosValidos++;
+        novasLinhasValidas.push([secretaria, contratado, objeto, dataFinal]);
+      }
+    }
+    
+    console.log('✅ [MAPEAMENTO] Re-validação concluída:');
+    console.log('  ├─ Válidos:', novosValidos);
+    console.log('  ├─ Inválidos:', novosInvalidos);
+    console.log('  └─ Linhas para importar:', novasLinhasValidas.length);
+    
+    // Atualizar estados
+    setLinhasParaImportar(novasLinhasValidas);
+    setValidacao({
+      total: todasAsLinhasOriginais.length,
+      validos: novosValidos,
+      invalidos: novosInvalidos,
+      duplicados: 0,
+      erros: novosErros
+    });
+    
+    // Ir para etapa de validação
+    setEtapa('validacao');
   };
 
   const validarArquivo = async () => {
@@ -310,6 +420,7 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
       // Salvar dados lidos para exibição
       const dadosParaExibir: any[][] = [];
       const todasLinhasValidas: any[][] = []; // Array temporário para todas as linhas válidas
+      const todasLinhasProcessadas: any[][] = []; // Guarda TODAS as linhas processadas (válidas e inválidas)
       
       const erros: string[] = [];
       const secretariasProblema: SecretariaNaoEncontrada[] = [];
@@ -396,6 +507,9 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
         console.log(`  ├─ Coluna C (Objeto): "${objeto}"`);
         console.log(`  └─ Coluna D (Data Final): "${dataFinal}"`);
         
+        // Salvar TODAS as linhas processadas (para re-validação posterior)
+        todasLinhasProcessadas.push([secretaria, contratado, objeto, dataFinal]);
+        
         // Salvar para preview (primeiras 5 linhas)
         if (dadosParaExibir.length < 5) {
           dadosParaExibir.push([secretaria, contratado, objeto, dataFinal]);
@@ -433,17 +547,55 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
         
         // Verificar se secretaria existe (por nome exato, sigla exata, ou similar)
         if (secretaria) {
-          // Verificar match exato de nome
-          const matchNomeExato = secretariasCadastradas.includes(secretaria);
+          // Normalizar para comparação (case-insensitive, sem espaços extras)
+          const secretariaNormalizada = secretaria.toLowerCase().trim();
           
-          // Verificar match exato de sigla
-          const matchSiglaExata = secretariasCompletasLocal.find(s => 
-            s.sigla && s.sigla.toLowerCase() === secretaria.toLowerCase()
+          // 1. Verificar match exato de NOME (case-insensitive)
+          const matchNomeExato = secretariasCadastradas.some(s => 
+            s.toLowerCase().trim() === secretariaNormalizada
           );
           
-          // Se encontrou match exato (nome ou sigla), está OK
-          if (!matchNomeExato && !matchSiglaExata) {
-            // Não encontrou match exato - gerar sugestões inteligentes
+          // 2. Verificar match exato de SIGLA (case-insensitive)
+          const matchSiglaExata = secretariasCompletasLocal.find(s => 
+            s.sigla && s.sigla.toLowerCase().trim() === secretariaNormalizada
+          );
+          
+          // 3. Verificar match PARCIAL (secretaria do Excel contém a sigla ou vice-versa)
+          const matchParcial = secretariasCompletasLocal.find(s => {
+            const siglaNorm = (s.sigla || '').toLowerCase().trim();
+            const nomeNorm = s.nome.toLowerCase().trim();
+            
+            // Se a sigla está vazia, ignorar
+            if (!siglaNorm) return false;
+            
+            // Se a secretaria do Excel contém a sigla (ex: "SEDUC" contém "SEDUC")
+            if (secretariaNormalizada.includes(siglaNorm)) {
+              return true;
+            }
+            
+            // Se o nome cadastrado contém a secretaria do Excel (ex: "Secretaria de Educação" contém "educação")
+            if (nomeNorm.includes(secretariaNormalizada)) {
+              return true;
+            }
+            
+            return false;
+          });
+          
+          // MATCH AUTOMÁTICO: Se encontrou por nome, sigla ou parcial, aceitar automaticamente
+          if (matchNomeExato || matchSiglaExata || matchParcial) {
+            if (matchSiglaExata) {
+              console.log(`  ✅ MATCH AUTOMÁTICO pela SIGLA: \"${secretaria}\" → \"${matchSiglaExata.nome}\"`);
+            } else if (matchParcial) {
+              console.log(`  ✅ MATCH AUTOMÁTICO PARCIAL: \"${secretaria}\" → \"${matchParcial.nome}\"`);
+            } else {
+              console.log(`  ✅ MATCH AUTOMÁTICO pelo NOME: \"${secretaria}\"`);
+            }
+            // NÃO marca como erro - aceita automaticamente!
+          } else {
+            // NÃO ENCONTROU MATCH: Precisa perguntar ao usuário
+            console.log(`  ⚠️ Secretaria NÃO encontrada: \"${secretaria}\" - requer MAPEAMENTO MANUAL`);
+            
+            // Gerar sugestões inteligentes
             const sugestoes = encontrarSecretariasMaisParecidas(secretaria, secretariasCadastradas, secretariasCompletasLocal);
             
             const secretariaExistente = secretariasProblema.find(s => s.nomeArquivo === secretaria);
@@ -457,9 +609,6 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
               });
             }
             temErro = true;
-          } else if (matchSiglaExata) {
-            // Se encontrou pela sigla, registrar no console para debug
-            console.log(`  ✅ Secretaria encontrada pela sigla: "${secretaria}" → "${matchSiglaExata.nome}"`);
           }
         }
         
@@ -486,7 +635,6 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
         } else {
           validos++;
           // Adicionar linha válida para importação
-          linhasParaImportar.push([secretaria, contratado, objeto, dataFinal]);
           todasLinhasValidas.push([secretaria, contratado, objeto, dataFinal]);
         }
       }
@@ -500,6 +648,7 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
       
       setDadosLidos(dadosParaExibir);
       setLinhasParaImportar(todasLinhasValidas); // Salvar TODAS as linhas válidas
+      setTodasAsLinhasOriginais(todasLinhasProcessadas); // Salvar TODAS as linhas processadas (para re-validação)
       setSecretariasNaoEncontradas(secretariasProblema);
       setContratosDuplicados(contratosProblema);
       setValidacao({
@@ -535,9 +684,9 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
       let contratosImportados = 0;
       let errosImportacao: string[] = [];
       
-      // Processar cada linha válida do Excel
-      for (let i = 1; i < linhasParaImportar.length + 1; i++) {
-        const linha = linhasParaImportar[i - 1];
+      // Processar cada linha válida do Excel (começar do índice 0)
+      for (let i = 0; i < linhasParaImportar.length; i++) {
+        const linha = linhasParaImportar[i];
         if (!linha) continue;
         
         try {
@@ -547,7 +696,7 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
           const objeto = linha[2] ? String(linha[2]).trim() : '';
           const dataFinal = linha[3] ? String(linha[3]).trim() : '';
           
-          console.log(`\n📝 [IMPORTAÇÃO] Processando linha ${i}:`, {
+          console.log(`\n📝 [IMPORTAÇÃO] Processando linha ${i + 1}:`, {
             secretaria,
             contratado,
             objeto,
@@ -556,7 +705,7 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
           
           // Se a secretaria estava no mapeamento, usar o valor mapeado
           if (mapeamentos[secretaria]) {
-            console.log(`  🔄 [IMPORTAÇÃO] Secretaria mapeada: "${secretaria}" → "${mapeamentos[secretaria]}"`);
+            console.log(`  🔄 [IMPORTAÇÃO] Secretaria mapeada: \"${secretaria}\" → \"${mapeamentos[secretaria]}\"`);
             if (mapeamentos[secretaria] === '__NOVA__') {
               // TODO: Implementar cadastro de nova secretaria
               console.warn(`⚠️ [IMPORTAÇÃO] Cadastro de nova secretaria não implementado: ${secretaria}`);
@@ -573,14 +722,40 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
           );
           
           if (secretariaEncontrada) {
-            console.log(`  ✅ [IMPORTAÇÃO] Secretaria encontrada pela sigla: "${linha[0]}" → "${secretariaEncontrada.nome}"`);
+            console.log(`  ✅ [IMPORTAÇÃO] Secretaria encontrada pela sigla: \"${linha[0]}\" → \"${secretariaEncontrada.nome}\"`);
             secretaria = secretariaEncontrada.nome;
           }
           
           // Validar campos obrigatórios
           if (!secretaria || !contratado || !objeto || !dataFinal) {
-            console.warn(`⚠️ [IMPORTAÇÃO] Linha ${i + 1}: Campos obrigatórios faltando`);
-            errosImportacao.push(`Linha ${i + 1}: Campos obrigatórios faltando`);
+            const camposFaltando = [];
+            if (!secretaria) camposFaltando.push('Secretaria');
+            if (!contratado) camposFaltando.push('Contratado');
+            if (!objeto) camposFaltando.push('Objeto');
+            if (!dataFinal) camposFaltando.push('Data Final');
+            
+            const mensagemErro = `Linha ${i + 1}: Campos obrigatórios faltando: ${camposFaltando.join(', ')}`;
+            console.warn(`⚠️ [IMPORTAÇÃO] ${mensagemErro}`);
+            errosImportacao.push(mensagemErro);
+            continue;
+          }
+          
+          // Validar e converter data
+          let dataFimFormatada = '';
+          try {
+            if (!dataFinal.includes('/')) {
+              throw new Error('Data não está no formato DD/MM/AAAA');
+            }
+            const partes = dataFinal.split('/');
+            if (partes.length !== 3) {
+              throw new Error('Data não tem 3 partes (DD/MM/AAAA)');
+            }
+            dataFimFormatada = partes.reverse().join('-'); // DD/MM/AAAA -> AAAA-MM-DD
+            console.log(`  📅 Data convertida: ${dataFinal} → ${dataFimFormatada}`);
+          } catch (erroData) {
+            const mensagemErro = `Linha ${i + 1}: Erro ao converter data \"${dataFinal}\": ${erroData.message}`;
+            console.error(`❌ [IMPORTAÇÃO] ${mensagemErro}`);
+            errosImportacao.push(mensagemErro);
             continue;
           }
           
@@ -591,7 +766,7 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
             contratado: contratado,
             secretaria: secretaria,
             dataInicio: new Date().toISOString().split('T')[0], // Data atual - ajuste conforme necessário
-            dataFim: dataFinal.split('/').reverse().join('-'), // Converter DD/MM/AAAA para AAAA-MM-DD
+            dataFim: dataFimFormatada,
             valor: 0, // Valor padrão - ajuste conforme necessário
             status: 'ativo',
             gestor: '', // Opcional
@@ -632,16 +807,24 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
       setValidacao(prev => ({
         ...prev,
         validos: contratosImportados,
+        invalidos: errosImportacao.length,
         erros: errosImportacao
       }));
       
       setEtapa('sucesso');
       
-      // Recarregar página após 2 segundos para mostrar novos contratos
-      console.log('🔄 [IMPORTAÇÃO] Recarregando página em 2 segundos...');
+      // Se houver erros, mostrar alerta detalhado
+      if (errosImportacao.length > 0) {
+        const primerosErros = errosImportacao.slice(0, 5);
+        const mensagem = `⚠️ ${contratosImportados} contratos importados, mas ${errosImportacao.length} falharam.\n\nPrimeiros erros:\n${primerosErros.join('\n')}\n\nVerifique o Console do Navegador (F12) para ver todos os erros.`;
+        alert(mensagem);
+      }
+      
+      // Recarregar página após 3 segundos para mostrar novos contratos
+      console.log('🔄 [IMPORTAÇÃO] Recarregando página em 3 segundos...');
       setTimeout(() => {
         window.location.reload();
-      }, 2000);
+      }, 3000);
       
     } catch (error) {
       console.error('❌ [IMPORTAÇÃO] Erro fatal durante importação:', error);
@@ -1192,67 +1375,64 @@ export function ImportarExcelModal({ isOpen, onClose }: ImportarExcelModalProps)
           )}
 
           {etapa === 'sucesso' && (
-            <div className="text-center py-12">
-              <div className="inline-flex items-center justify-center size-20 bg-green-50 rounded-full mb-4">
-                <CheckCircle className="size-10 text-green-600" />
+            <div className="text-center py-8">
+              <div className="inline-flex items-center justify-center size-16 bg-green-50 rounded-full mb-4">
+                <CheckCircle className="size-8 text-green-600" />
               </div>
-              <h3 className="text-[#102a43] font-medium text-xl mb-2">
+              <h3 className="text-[#102a43] font-medium mb-2">
                 Importação concluída!
               </h3>
-              <p className="text-gray-600 mb-6">
-                {validacao.validos} contratos foram importados com sucesso para o sistema.
+              <p className="text-gray-600 text-sm mb-4">
+                {validacao.validos} {validacao.validos === 1 ? 'contrato foi importado' : 'contratos foram importados'} com sucesso.
               </p>
               
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-md mx-auto mb-6">
-                <p className="text-green-900 text-sm">
-                  Os contratos já estão disponíveis na listagem e podem ser visualizados e editados normalmente.
-                </p>
-              </div>
-              
-              <button
-                onClick={onClose}
-                className="px-6 py-2.5 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium inline-flex items-center gap-2"
-              >
-                Fechar e visualizar contratos
-              </button>
+              {validacao.invalidos > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 max-w-md mx-auto">
+                  <p className="text-amber-800 text-sm">
+                    {validacao.invalidos} {validacao.invalidos === 1 ? 'registro teve erro' : 'registros tiveram erros'} e {validacao.invalidos === 1 ? 'foi ignorado' : 'foram ignorados'}.
+                  </p>
+                </div>
+              )}
+
+              <p className="text-gray-600 text-sm">
+                A página será recarregada em instantes para exibir os novos contratos...
+              </p>
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-6 border-t border-gray-200 flex justify-between items-center">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-md text-[#102a43] text-sm hover:bg-gray-50 font-medium"
-          >
-            {etapa === 'sucesso' ? 'Fechar' : 'Cancelar'}
-          </button>
-          
-          {etapa === 'upload' && arquivo && (
-            <button
-              onClick={validarArquivo}
-              className="px-4 py-2 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium"
-            >
-              Validar e continuar
-            </button>
-          )}
-
-          {etapa === 'validacao' && validacao.validos > 0 && (
+        {/* Footer / Actions */}
+        <div className="p-6 border-t border-gray-200">
+          {etapa === 'validacao' && (
             <button
               onClick={importarContratos}
-              className="px-4 py-2 bg-[#0b6b3a] text-white rounded-md text-sm hover:bg-[#0a5a31] font-medium"
+              disabled={validacao.validos === 0}
+              className={`w-full px-4 py-3 rounded-lg font-medium transition-colors ${
+                validacao.validos > 0
+                  ? 'bg-[#0b6b3a] text-white hover:bg-[#0a5a31]'
+                  : 'bg-gray-400 cursor-not-allowed'
+              }`}
             >
-              Importar {validacao.validos} contratos
+              Importar {validacao.validos} {validacao.validos === 1 ? 'contrato' : 'contratos'}
             </button>
           )}
-
+          
           {etapa === 'mapeamento' && (
             <button
-              onClick={importarContratos}
+              onClick={() => {
+                // Verificar se todas as secretarias foram mapeadas
+                const todasMapeadas = Object.keys(mapeamentos).length === secretariasNaoEncontradas.length;
+                if (todasMapeadas) {
+                  // Re-validar com os mapeamentos aplicados
+                  aplicarMapeamentosERevalidar();
+                } else {
+                  alert('Por favor, mapeie todas as secretarias antes de continuar.');
+                }
+              }}
               disabled={Object.keys(mapeamentos).length !== secretariasNaoEncontradas.length}
-              className={`px-4 py-2 text-white rounded-md text-sm font-medium ${
+              className={`w-full px-4 py-3 rounded-lg font-medium transition-colors ${
                 Object.keys(mapeamentos).length === secretariasNaoEncontradas.length
-                  ? 'bg-[#0b6b3a] hover:bg-[#0a5a31]'
+                  ? 'bg-[#0b6b3a] text-white hover:bg-[#0a5a31]'
                   : 'bg-gray-400 cursor-not-allowed'
               }`}
             >

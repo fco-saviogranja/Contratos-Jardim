@@ -8,6 +8,7 @@ export interface User {
   secretaria: string;
   situacao: 'ativo' | 'inativo';
   ultimoAcesso?: string;
+  fotoPerfil?: string; // URL da foto de perfil no Supabase Storage
 }
 
 export type SituacaoContrato = 'vigente' | 'proximo_vencimento' | 'vencido';

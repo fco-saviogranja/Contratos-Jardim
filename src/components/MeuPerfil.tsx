@@ -82,37 +82,27 @@ export function MeuPerfil() {
     try {
       setUploadingFoto(true);
       
-      // Converter para base64
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const base64 = reader.result as string;
-          
-          // Fazer upload
-          const response = await usuariosAPI.uploadFotoPerfil(base64, file.name);
-          
-          if (response.success) {
-            setForm(prev => ({ ...prev, fotoPerfil: response.fotoUrl }));
-            toast.success('Foto atualizada com sucesso!');
-            
-            // Recarregar dados do usuário
-            await carregarDados();
-            
-            // Disparar evento para atualizar header
-            window.dispatchEvent(new Event('fotoPerfilAtualizada'));
-          }
-        } catch (error: any) {
-          console.error('❌ Erro ao fazer upload:', error);
-          toast.error('Erro ao fazer upload: ' + error.message);
-        } finally {
-          setUploadingFoto(false);
-        }
-      };
+      // Criar FormData com o arquivo real (método recomendado)
+      const formData = new FormData();
+      formData.append('foto', file);
       
-      reader.readAsDataURL(file);
+      // Fazer upload com FormData
+      const response = await usuariosAPI.uploadFotoPerfil(formData);
+      
+      if (response.success) {
+        setForm(prev => ({ ...prev, fotoPerfil: response.fotoUrl }));
+        toast.success('Foto atualizada com sucesso!');
+        
+        // Recarregar dados do usuário
+        await carregarDados();
+        
+        // Disparar evento para atualizar header
+        window.dispatchEvent(new Event('fotoPerfilAtualizada'));
+      }
     } catch (error: any) {
-      console.error('❌ Erro ao processar imagem:', error);
-      toast.error('Erro ao processar imagem: ' + error.message);
+      console.error('❌ Erro ao fazer upload:', error);
+      toast.error('Erro ao atualizar foto: ' + error.message);
+    } finally {
       setUploadingFoto(false);
     }
   };
@@ -189,7 +179,16 @@ export function MeuPerfil() {
   };
 
   const getPerfilBadge = (perfil: string) => {
-    if (perfil === 'admin') {
+    // Normalizar perfil para código
+    const perfilNormalizado = perfil.toLowerCase().includes('administrador') 
+      ? 'admin'
+      : perfil.toLowerCase().includes('gestor')
+      ? 'gestor'
+      : perfil === 'admin' || perfil === 'gestor' || perfil === 'fiscal'
+      ? perfil
+      : 'fiscal';
+    
+    if (perfilNormalizado === 'admin') {
       return (
         <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium flex items-center gap-2 w-fit">
           <Shield className="size-4" />
@@ -197,7 +196,7 @@ export function MeuPerfil() {
         </span>
       );
     }
-    if (perfil === 'gestor') {
+    if (perfilNormalizado === 'gestor') {
       return (
         <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium flex items-center gap-2 w-fit">
           <Shield className="size-4" />

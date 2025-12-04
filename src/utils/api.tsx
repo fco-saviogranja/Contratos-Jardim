@@ -97,8 +97,7 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
     const isLoginRequest = endpoint === '/auth/login' || endpoint === '/auth/setup-admin' || endpoint === '/solicitar-cadastro';
     
     if ((response.status === 401 || (data.code === 401 && data.message === 'Invalid JWT')) && !isLoginRequest) {
-      console.warn('⚠️ Token inválido ou expirado (401)');
-      console.warn('⚠️ Detalhes:', data);
+      console.info('ℹ️ [API] Token JWT expirado ou inválido - sessão encerrada');
       
       // Limpar sessão se o token estiver inválido
       authState.accessToken = null;
@@ -117,6 +116,11 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
 
     return data;
   } catch (error: any) {
+    // Se for erro de sessão expirada, não logar como erro (é comportamento normal)
+    if (error.message === 'SESSION_EXPIRED') {
+      throw new Error('Sessão expirada. Por favor, faça login novamente.');
+    }
+    
     console.error('❌ Erro na requisição:', error);
     
     // Tratar erro de timeout
@@ -134,11 +138,6 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
     // Se for erro de backend indisponível, propagar
     if (error.message === 'BACKEND_UNAVAILABLE') {
       throw error;
-    }
-    
-    // Se for erro de sessão expirada, propagar sem modificar
-    if (error.message === 'SESSION_EXPIRED') {
-      throw new Error('Sessão expirada. Por favor, faça login novamente.');
     }
     
     throw error;
@@ -481,17 +480,34 @@ export const usuarios = {
   }) {
     console.log('✏️ Atualizando meu perfil...');
     return await apiRequest('/usuarios/me/perfil', {
-      method: 'PUT',
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   },
 
-  async uploadFotoPerfil(foto: string, fileName: string) {
-    console.log('📸 Fazendo upload de foto de perfil...');
-    return await apiRequest('/usuarios/me/foto', {
+  async uploadFotoPerfil(formData: FormData) {
+    console.log('📸 Fazendo upload de foto de perfil (FormData)...');
+    
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      throw new Error('Usuário não autenticado');
+    }
+
+    const response = await fetch(`${SERVER_URL}/usuarios/me/foto`, {
       method: 'POST',
-      body: JSON.stringify({ foto, fileName }),
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // NÃO definir Content-Type - o navegador define automaticamente com boundary
+      },
+      body: formData
     });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido' }));
+      throw new Error(errorData.error || 'Erro ao fazer upload');
+    }
+
+    return await response.json();
   }
 };
 

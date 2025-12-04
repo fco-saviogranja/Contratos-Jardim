@@ -38,10 +38,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const savedUser = auth.getUser();
     if (savedUser && auth.isAuthenticated()) {
+      console.log('✅ [AUTH] Sessão restaurada do localStorage:', savedUser);
+      console.log('📸 [AUTH] Foto de perfil:', savedUser.fotoPerfil ? 'Sim' : 'Não');
       setUser(savedUser);
     }
     setLoading(false);
   }, []);
+
+  // Verificar periodicamente se a sessão ainda é válida
+  useEffect(() => {
+    if (!user) return;
+
+    const checkInterval = setInterval(() => {
+      const isValid = checkSession();
+      if (!isValid) {
+        console.warn('⚠️ [AUTH] Sessão expirada detectada - fazendo logout');
+        setUser(null);
+        // Redirecionar para login (se necessário)
+      }
+    }, 60000); // Verificar a cada 1 minuto
+
+    return () => clearInterval(checkInterval);
+  }, [user]);
 
   const login = async (email: string, senha: string): Promise<boolean> => {
     try {
@@ -63,11 +81,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           perfil: result.user.perfil,
           secretaria: result.user.secretaria,
           situacao: 'ativo',
-          ultimoAcesso: new Date().toISOString()
+          ultimoAcesso: new Date().toISOString(),
+          fotoPerfil: result.user.fotoPerfil || undefined // Incluir foto se existir
         };
         
         setUser(userData);
         console.log('✅ [AUTH] Login bem-sucedido com Supabase!', userData);
+        console.log('📸 [AUTH] Foto de perfil no login:', userData.fotoPerfil ? 'Sim' : 'Não');
         return true;
       }
       
